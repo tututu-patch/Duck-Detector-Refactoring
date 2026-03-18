@@ -564,7 +564,6 @@ class KernelCheckCardModelMapper {
             "telegramScan",
             "mentionScan",
             "customKernel",
-            "dirtyKernel",
             "cmdlineCheck",
             "buildTime",
             "cvePatchCheck",

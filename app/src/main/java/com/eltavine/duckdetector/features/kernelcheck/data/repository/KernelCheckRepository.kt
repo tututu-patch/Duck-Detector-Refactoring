@@ -136,22 +136,6 @@ class KernelCheckRepository(
             )
         }
 
-        val dirtyDetail = nativeSnapshot.findings.firstDetail("DIRTY_KERNEL|FOUND|")
-            ?: nativeSnapshot.findings.firstDetail("DIRTY_KERNEL|INDICATOR|")
-            ?: detectDirtyKernelFallback(
-                unameOutput = unameOutput,
-                procVersion = procVersion,
-            )
-        if (dirtyDetail != null) {
-            dangerFindings += KernelCheckFinding(
-                id = "dirty_kernel",
-                label = "Dirty kernel",
-                value = "Modified",
-                detail = dirtyDetail,
-                severity = KernelCheckFindingSeverity.HARD,
-            )
-        }
-
         val cmdlineMatches = nativeSnapshot.findings.details("CMDLINE|CRITICAL|")
             .ifEmpty { detectCriticalCmdlineFallback(procCmdline) }
         if (cmdlineMatches.isNotEmpty()) {
@@ -218,7 +202,6 @@ class KernelCheckRepository(
             procCmdline = procCmdline,
             dangerFindings = dangerFindings,
             infoFindings = infoFindings,
-            dirtyKernel = dirtyDetail != null,
             suspiciousCmdline = cmdlineMatches.isNotEmpty(),
             buildTimeMismatch = buildTimeDetail != null,
             kptrExposed = kptrDetail != null || nativeSnapshot.kptrExposed,
@@ -247,7 +230,6 @@ class KernelCheckRepository(
             buildNamingMethod("telegramScan", dangerById["telegram_ref"]),
             buildNamingMethod("mentionScan", dangerById["at_mention"]),
             buildNamingMethod("customKernel", dangerById["custom_kernel"]),
-            buildNativeMethod("dirtyKernel", dangerById["dirty_kernel"], nativeAvailable, "Clean"),
             buildNativeMethod(
                 "cmdlineCheck",
                 dangerById["suspicious_cmdline"],
@@ -381,30 +363,6 @@ class KernelCheckRepository(
                 }
             }
         }
-    }
-
-    private fun detectDirtyKernelFallback(
-        unameOutput: String,
-        procVersion: String,
-    ): String? {
-        val sources = listOf(
-            "uname -a" to unameOutput,
-            "/proc/version" to procVersion,
-        )
-        for ((label, text) in sources) {
-            if (text.isBlank()) {
-                continue
-            }
-            if (text.contains("-dirty")) {
-                return "-dirty suffix detected in $label."
-            }
-            val extraIndicator = listOf("-custom", "-mod", "-patched")
-                .firstOrNull { text.contains(it) }
-            if (extraIndicator != null) {
-                return "Kernel version from $label contains custom build marker $extraIndicator."
-            }
-        }
-        return null
     }
 
     private fun detectCriticalCmdlineFallback(

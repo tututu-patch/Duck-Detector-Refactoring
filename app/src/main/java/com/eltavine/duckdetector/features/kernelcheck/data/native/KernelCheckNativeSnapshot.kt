@@ -4,7 +4,6 @@ data class KernelCheckNativeSnapshot(
     val available: Boolean = false,
     val procVersion: String = "",
     val procCmdline: String = "",
-    val dirtyKernel: Boolean = false,
     val suspiciousCmdline: Boolean = false,
     val buildTimeMismatch: Boolean = false,
     val kptrExposed: Boolean = false,

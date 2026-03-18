@@ -23,7 +23,6 @@ namespace {
         bool available = true;
         std::string proc_version;
         std::string proc_cmdline;
-        bool dirty_kernel = false;
         bool suspicious_cmdline = false;
         bool build_time_mismatch = false;
         bool kptr_exposed = false;
@@ -132,31 +131,6 @@ namespace {
         }
         if (snapshot.proc_cmdline.empty()) {
             snapshot.findings.emplace_back("PROC_CMDLINE|FAILED|Unable to read /proc/cmdline");
-        }
-    }
-
-    void check_dirty_kernel(KernelSnapshot &snapshot) {
-        if (snapshot.proc_version.empty()) {
-            return;
-        }
-        if (snapshot.proc_version.find("-dirty") != std::string::npos) {
-            snapshot.dirty_kernel = true;
-            snapshot.findings.emplace_back("DIRTY_KERNEL|FOUND|-dirty suffix detected");
-        }
-
-        static const char *extra_indicators[] = {
-                "-custom",
-                "-mod",
-                "-patched",
-                "-perf",
-                "+",
-        };
-        for (const char *indicator: extra_indicators) {
-            if (snapshot.proc_version.find(indicator) != std::string::npos) {
-                snapshot.dirty_kernel = true;
-                snapshot.findings.emplace_back(
-                        std::string("DIRTY_KERNEL|INDICATOR|Found: ") + indicator);
-            }
         }
     }
 
@@ -283,7 +257,6 @@ namespace {
     KernelSnapshot collect_snapshot(jlong system_build_time) {
         KernelSnapshot snapshot;
         read_proc_files(snapshot);
-        check_dirty_kernel(snapshot);
         check_cmdline(snapshot);
         check_build_time(snapshot, system_build_time);
         check_kptr(snapshot);
@@ -308,7 +281,6 @@ Java_com_eltavine_duckdetector_features_kernelcheck_data_native_KernelCheckNativ
     output << "AVAILABLE=" << (snapshot.available ? "1" : "0") << "\n";
     output << "PROC_VERSION=" << escape_value(snapshot.proc_version) << "\n";
     output << "PROC_CMDLINE=" << escape_value(snapshot.proc_cmdline) << "\n";
-    output << "DIRTY=" << (snapshot.dirty_kernel ? "1" : "0") << "\n";
     output << "CMDLINE=" << (snapshot.suspicious_cmdline ? "1" : "0") << "\n";
     output << "BUILD_TIME=" << (snapshot.build_time_mismatch ? "1" : "0") << "\n";
     output << "KPTR=" << (snapshot.kptr_exposed ? "1" : "0") << "\n";

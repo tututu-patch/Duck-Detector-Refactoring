@@ -29,7 +29,6 @@ class KernelCheckNativeBridge {
                 .orEmpty(),
             procCmdline = entries.firstOrNull { it.first == "PROC_CMDLINE" }?.second?.decodeValue()
                 .orEmpty(),
-            dirtyKernel = entries.firstOrNull { it.first == "DIRTY" }?.second == "1",
             suspiciousCmdline = entries.firstOrNull { it.first == "CMDLINE" }?.second == "1",
             buildTimeMismatch = entries.firstOrNull { it.first == "BUILD_TIME" }?.second == "1",
             kptrExposed = entries.firstOrNull { it.first == "KPTR" }?.second == "1",

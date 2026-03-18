@@ -49,7 +49,6 @@ data class KernelCheckReport(
     val procCmdline: String,
     val dangerFindings: List<KernelCheckFinding>,
     val infoFindings: List<KernelCheckFinding>,
-    val dirtyKernel: Boolean,
     val suspiciousCmdline: Boolean,
     val buildTimeMismatch: Boolean,
     val kptrExposed: Boolean,
@@ -100,7 +99,6 @@ data class KernelCheckReport(
         )
 
         private val BOOT_FINDING_IDS = setOf(
-            "dirty_kernel",
             "suspicious_cmdline",
             "build_time_mismatch",
         )
@@ -113,7 +111,6 @@ data class KernelCheckReport(
                 procCmdline = "",
                 dangerFindings = emptyList(),
                 infoFindings = emptyList(),
-                dirtyKernel = false,
                 suspiciousCmdline = false,
                 buildTimeMismatch = false,
                 kptrExposed = false,
@@ -134,7 +131,6 @@ data class KernelCheckReport(
                 procCmdline = "",
                 dangerFindings = emptyList(),
                 infoFindings = emptyList(),
-                dirtyKernel = false,
                 suspiciousCmdline = false,
                 buildTimeMismatch = false,
                 kptrExposed = false,
