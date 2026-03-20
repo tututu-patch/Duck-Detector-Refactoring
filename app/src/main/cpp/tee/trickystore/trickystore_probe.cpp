@@ -1,5 +1,6 @@
 #include "tee/trickystore/trickystore_probe.h"
 
+#include <algorithm>
 #include <dlfcn.h>
 #include <elf.h>
 #include <errno.h>
@@ -18,6 +19,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "tee/common/syscall_facade.h"
@@ -83,6 +85,34 @@ namespace ducktee::trickystore {
         constexpr int kHoneypotIterations = 40;
         constexpr std::uint64_t kHoneypotThresholdNs = 10'000ULL;
         constexpr int kRepeatedProbeAttempts = 3;
+        constexpr std::array<ducktee::common::SyscallBackend, 3> kIoctlBackends = {
+                ducktee::common::SyscallBackend::Libc,
+                ducktee::common::SyscallBackend::Syscall,
+                ducktee::common::SyscallBackend::Asm,
+        };
+
+        struct IoctlBackendObservation {
+            ducktee::common::SyscallBackend backend = ducktee::common::SyscallBackend::Libc;
+            long result = -1;
+            int error_number = 0;
+            int protocol_version = 0;
+        };
+
+        struct HoneypotTimingPath {
+            ducktee::common::SyscallBackend backend = ducktee::common::SyscallBackend::Libc;
+            bool available = false;
+            std::vector<std::uint64_t> samples;
+            std::string failure;
+
+            [[nodiscard]] std::uint64_t median_ns() const {
+                if (samples.empty()) {
+                    return 0;
+                }
+                std::vector<std::uint64_t> sorted = samples;
+                std::sort(sorted.begin(), sorted.end());
+                return sorted[sorted.size() / 2];
+            }
+        };
 
         int raw_open(const char *path, int flags) {
 #if defined(__NR_openat)
@@ -100,11 +130,158 @@ namespace ducktee::trickystore {
             return fd;
         }
 
-        std::uint64_t now_ns() {
-            timespec ts{};
-            clock_gettime(CLOCK_MONOTONIC, &ts);
-            return static_cast<std::uint64_t>(ts.tv_sec) * 1'000'000'000ULL +
-                   static_cast<std::uint64_t>(ts.tv_nsec);
+        std::vector<ducktee::common::SyscallBackend> available_backends() {
+            std::vector<ducktee::common::SyscallBackend> backends;
+            for (const auto backend: kIoctlBackends) {
+                if (ducktee::common::backend_available(backend)) {
+                    backends.push_back(backend);
+                }
+            }
+            return backends;
+        }
+
+        bool monotonic_ns(
+                const ducktee::common::SyscallBackend backend,
+                std::uint64_t *out_ns
+        ) {
+            return ducktee::common::monotonic_time_ns(backend, out_ns);
+        }
+
+        ducktee::common::SyscallCallResult call_ioctl_backend(
+                const ducktee::common::SyscallBackend backend,
+                const int fd,
+                const unsigned long request,
+                void *arg
+        ) {
+            return ducktee::common::invoke_ioctl(backend, fd, request, arg);
+        }
+
+        std::string format_backend_observation(const IoctlBackendObservation &observation) {
+            std::ostringstream builder;
+            builder << ducktee::common::backend_label(observation.backend)
+                    << "(ret=" << observation.result
+                    << ", errno=" << observation.error_number
+                    << ", version=" << observation.protocol_version << ")";
+            return builder.str();
+        }
+
+        bool backend_samples_aligned(
+                const IoctlBackendObservation &reference,
+                const IoctlBackendObservation &candidate
+        ) {
+            return reference.result == candidate.result &&
+                   reference.error_number == candidate.error_number &&
+                   reference.protocol_version == candidate.protocol_version;
+        }
+
+        void prepare_honeypot_payload(
+                std::uint8_t *write_buffer,
+                binder_write_read *bwr,
+                std::uint8_t *fake_data
+        ) {
+            std::memset(write_buffer, 0, 256);
+            const std::uint32_t command = BC_TRANSACTION;
+            std::memcpy(write_buffer, &command, sizeof(command));
+
+            binder_transaction_data transaction{};
+            transaction.target.handle = 0;
+            transaction.code = 1;
+            transaction.data_size = 64;
+            transaction.offsets_size = 0;
+
+            std::memset(fake_data, 0, 64);
+            const char *descriptor = "android.security.keystore2";
+            std::memcpy(fake_data, descriptor, std::strlen(descriptor));
+            transaction.data.ptr.buffer = reinterpret_cast<unsigned long>(fake_data);
+            transaction.data.ptr.offsets = 0;
+
+            std::memcpy(write_buffer + sizeof(command), &transaction, sizeof(transaction));
+
+            std::memset(bwr, 0, sizeof(*bwr));
+            bwr->write_buffer = reinterpret_cast<unsigned long>(write_buffer);
+            bwr->write_size = sizeof(command) + sizeof(transaction);
+        }
+
+        bool collect_honeypot_backend_samples(
+                const int binder_fd,
+                HoneypotTimingPath *path
+        ) {
+            if (path == nullptr ||
+                !ducktee::common::backend_available(path->backend)) {
+                return false;
+            }
+
+            std::uint8_t write_buffer[256];
+            std::uint8_t fake_data[64];
+            binder_write_read bwr{};
+            prepare_honeypot_payload(write_buffer, &bwr, fake_data);
+
+            for (int index = 0; index < kHoneypotIterations; ++index) {
+                bwr.write_consumed = 0;
+                std::uint64_t start = 0;
+                std::uint64_t end = 0;
+                if (!monotonic_ns(path->backend, &start)) {
+                    path->failure = std::string("Failed to read ")
+                                    + ducktee::common::backend_label(path->backend)
+                                    + " monotonic clock before ioctl.";
+                    return false;
+                }
+                const auto result = call_ioctl_backend(path->backend, binder_fd, BINDER_WRITE_READ,
+                                                       &bwr);
+                if (!result.available) {
+                    path->failure = std::string("Backend ")
+                                    + ducktee::common::backend_label(path->backend)
+                                    + " was unavailable for binder honeypot timing.";
+                    return false;
+                }
+                if (!monotonic_ns(path->backend, &end)) {
+                    path->failure = std::string("Failed to read ")
+                                    + ducktee::common::backend_label(path->backend)
+                                    + " monotonic clock after ioctl.";
+                    return false;
+                }
+                path->samples.push_back(end >= start ? (end - start) : 0);
+            }
+
+            path->available = !path->samples.empty();
+            return path->available;
+        }
+
+        bool lower_paths_are_stable(const std::vector<HoneypotTimingPath> &paths) {
+            std::vector<std::uint64_t> medians;
+            for (const auto &path: paths) {
+                if (path.backend == ducktee::common::SyscallBackend::Libc || !path.available) {
+                    continue;
+                }
+                medians.push_back(path.median_ns());
+            }
+            if (medians.size() < 2) {
+                return true;
+            }
+            const auto minmax = std::minmax_element(medians.begin(), medians.end());
+            const auto fastest = std::max<std::uint64_t>(1, *minmax.first);
+            const auto slowest = *minmax.second;
+            return slowest <= fastest + 25'000ULL && slowest <= fastest * 3ULL / 2ULL;
+        }
+
+        std::string describe_honeypot_paths(const std::vector<HoneypotTimingPath> &paths) {
+            std::ostringstream builder;
+            bool first = true;
+            for (const auto &path: paths) {
+                if (!first) {
+                    builder << ", ";
+                }
+                first = false;
+                builder << ducktee::common::backend_label(path.backend) << "=";
+                if (path.available) {
+                    builder << path.median_ns() << "ns";
+                } else if (!path.failure.empty()) {
+                    builder << "unavailable(" << path.failure << ")";
+                } else {
+                    builder << "unavailable";
+                }
+            }
+            return builder.str();
         }
 
         LibInfo find_library(const std::string &needle) {
@@ -365,37 +542,57 @@ namespace ducktee::trickystore {
             MethodSnapshot snapshot;
             const int binder_fd = open_binder_device();
             if (binder_fd < 0) {
-                snapshot.detail = "Cannot open binder device for ioctl comparison.";
+                snapshot.detail = "Cannot open binder device for ioctl backend comparison.";
                 return snapshot;
             }
 
-            binder_version raw_version{};
-            binder_version libc_version{};
-            errno = 0;
-            const long raw_result = ducktee::common::raw_ioctl(binder_fd, BINDER_VERSION,
-                                                               &raw_version);
-            const int raw_errno = errno;
-            errno = 0;
-            const int libc_result = ioctl(binder_fd, BINDER_VERSION, &libc_version);
-            const int libc_errno = errno;
+            std::vector<IoctlBackendObservation> observations;
+            for (const auto backend: available_backends()) {
+                binder_version version{};
+                const auto result = call_ioctl_backend(backend, binder_fd, BINDER_VERSION,
+                                                       &version);
+                if (!result.available) {
+                    continue;
+                }
+                observations.push_back(IoctlBackendObservation{
+                        .backend = backend,
+                        .result = result.value,
+                        .error_number = result.error_number,
+                        .protocol_version = static_cast<int>(version.protocol_version),
+                });
+            }
             close(binder_fd);
 
-            if (raw_result != libc_result ||
-                raw_errno != libc_errno ||
-                raw_version.protocol_version != libc_version.protocol_version) {
+            if (observations.size() < 2) {
+                snapshot.detail = "Fewer than two ioctl backends were available for binder comparison.";
+                return snapshot;
+            }
+
+            const auto &reference = observations.front();
+            for (std::size_t index = 1; index < observations.size(); ++index) {
+                if (backend_samples_aligned(reference, observations[index])) {
+                    continue;
+                }
                 snapshot.detected = true;
                 std::ostringstream builder;
-                builder << "raw ioctl result=" << raw_result
-                        << " errno=" << raw_errno
-                        << " version=" << raw_version.protocol_version
-                        << " differed from libc ioctl result=" << libc_result
-                        << " errno=" << libc_errno
-                        << " version=" << libc_version.protocol_version << ".";
+                builder << "Binder version query diverged across backends: "
+                        << format_backend_observation(reference) << " vs "
+                        << format_backend_observation(observations[index]) << ".";
                 snapshot.findings.push_back(builder.str());
-                snapshot.detail = "Raw ioctl and libc ioctl returned different binder results.";
-            } else {
-                snapshot.detail = "Raw ioctl and libc ioctl matched on binder version query.";
+                snapshot.detail = "Binder version query returned different results across libc/syscall/asm backends.";
+                return snapshot;
             }
+
+            std::ostringstream builder;
+            builder << "Binder version query aligned across ";
+            for (std::size_t index = 0; index < observations.size(); ++index) {
+                if (index > 0) {
+                    builder << ", ";
+                }
+                builder << ducktee::common::backend_label(observations[index].backend);
+            }
+            builder << " backends.";
+            snapshot.detail = builder.str();
             return snapshot;
         }
 
@@ -421,12 +618,12 @@ namespace ducktee::trickystore {
             snapshot.detected = hit_count >= 2;
             std::ostringstream builder;
             if (snapshot.detected) {
-                builder << "Raw ioctl and libc ioctl diverged on " << hit_count
-                        << "/" << kRepeatedProbeAttempts << " binder version probes.";
+                builder << "Binder version ioctl diverged on " << hit_count
+                        << "/" << kRepeatedProbeAttempts << " backend-comparison probes.";
                 snapshot.detail = builder.str();
             } else {
-                builder << "Raw ioctl and libc ioctl stayed aligned across "
-                        << kRepeatedProbeAttempts << " binder version probes";
+                builder << "Binder version ioctl stayed aligned across "
+                        << kRepeatedProbeAttempts << " backend-comparison probes";
                 if (hit_count > 0) {
                     builder << " (" << hit_count << "/" << kRepeatedProbeAttempts
                             << " suspicious run).";
@@ -569,61 +766,65 @@ namespace ducktee::trickystore {
                 return snapshot;
             }
 
-            std::uint8_t write_buffer[256];
-            std::memset(write_buffer, 0, sizeof(write_buffer));
-            const std::uint32_t command = BC_TRANSACTION;
-            std::memcpy(write_buffer, &command, sizeof(command));
-
-            binder_transaction_data transaction{};
-            transaction.target.handle = 0;
-            transaction.code = 1;
-            transaction.data_size = 64;
-            transaction.offsets_size = 0;
-
-            std::uint8_t fake_data[64];
-            std::memset(fake_data, 0, sizeof(fake_data));
-            const char *descriptor = "android.security.keystore2";
-            std::memcpy(fake_data, descriptor, std::strlen(descriptor));
-            transaction.data.ptr.buffer = reinterpret_cast<unsigned long>(fake_data);
-            transaction.data.ptr.offsets = 0;
-
-            std::memcpy(write_buffer + sizeof(command), &transaction, sizeof(transaction));
-
-            binder_write_read bwr{};
-            bwr.write_buffer = reinterpret_cast<unsigned long>(write_buffer);
-            bwr.write_size = sizeof(command) + sizeof(transaction);
-
-            std::uint64_t got_total = 0;
-            for (int index = 0; index < kHoneypotIterations; ++index) {
-                bwr.write_consumed = 0;
-                const std::uint64_t start = now_ns();
-                ioctl(binder_fd, BINDER_WRITE_READ, &bwr);
-                got_total += now_ns() - start;
-            }
-
-            std::uint64_t raw_total = 0;
-            for (int index = 0; index < kHoneypotIterations; ++index) {
-                bwr.write_consumed = 0;
-                const std::uint64_t start = now_ns();
-                ducktee::common::raw_ioctl(binder_fd, BINDER_WRITE_READ, &bwr);
-                raw_total += now_ns() - start;
+            std::vector<HoneypotTimingPath> paths;
+            for (const auto backend: available_backends()) {
+                HoneypotTimingPath path;
+                path.backend = backend;
+                (void) collect_honeypot_backend_samples(binder_fd, &path);
+                paths.push_back(std::move(path));
             }
 
             munmap(mapped, 4096);
             close(binder_fd);
 
-            const std::uint64_t got_average = got_total / kHoneypotIterations;
-            const std::uint64_t raw_average = raw_total / kHoneypotIterations;
-            if (got_average > raw_average && (got_average - raw_average) > kHoneypotThresholdNs) {
+            const auto libc_it = std::find_if(
+                    paths.begin(),
+                    paths.end(),
+                    [](const HoneypotTimingPath &path) {
+                        return path.backend == ducktee::common::SyscallBackend::Libc;
+                    }
+            );
+            std::uint64_t fastest_lower = 0;
+            bool lower_found = false;
+            for (const auto &path: paths) {
+                if (!path.available || path.backend == ducktee::common::SyscallBackend::Libc) {
+                    continue;
+                }
+                const auto median = path.median_ns();
+                if (!lower_found || median < fastest_lower) {
+                    fastest_lower = median;
+                    lower_found = true;
+                }
+            }
+
+            const bool stable_lower_paths = lower_paths_are_stable(paths);
+            const bool libc_available = libc_it != paths.end() && libc_it->available;
+            const std::uint64_t libc_median = libc_available ? libc_it->median_ns() : 0;
+            const bool suspicious = libc_available &&
+                                    lower_found &&
+                                    stable_lower_paths &&
+                                    libc_median > fastest_lower &&
+                                    (libc_median - fastest_lower) > kHoneypotThresholdNs &&
+                                    libc_median > fastest_lower * 3ULL / 2ULL;
+
+            if (suspicious) {
                 snapshot.detected = true;
                 std::ostringstream builder;
-                builder << "GOT ioctl averaged " << got_average
-                        << "ns while raw ioctl averaged " << raw_average
-                        << "ns on a keystore2-like binder transaction.";
+                builder
+                        << "Keystore-style binder ioctl median timing diverged across redundant backends: "
+                        << describe_honeypot_paths(paths) << ".";
                 snapshot.findings.push_back(builder.str());
-                snapshot.detail = "Keystore-style binder honeypot triggered a timing anomaly.";
+                snapshot.detail = "Keystore-style binder honeypot found a libc-vs-lower-path timing anomaly.";
             } else {
-                snapshot.detail = "Keystore-style binder honeypot timing stayed within normal bounds.";
+                std::ostringstream builder;
+                builder
+                        << "Keystore-style binder honeypot timing stayed within normal bounds across redundant backends. "
+                        << describe_honeypot_paths(paths);
+                if (!stable_lower_paths) {
+                    builder
+                            << " Lower-level syscall and asm paths were not stable enough to escalate.";
+                }
+                snapshot.detail = builder.str();
             }
             return snapshot;
         }

@@ -134,6 +134,12 @@ set(VIRTUALIZATION_ASM_SOURCES)
 if(ANDROID_ABI STREQUAL "arm64-v8a")
     list(APPEND TEE_ASM_SOURCES asm/arm64/syscall_fastpath.S)
     list(APPEND VIRTUALIZATION_ASM_SOURCES asm/arm64/virtualization_traps.S)
+elseif(ANDROID_ABI STREQUAL "armeabi-v7a")
+    list(APPEND TEE_ASM_SOURCES asm/arm/syscall_fastpath.S)
+elseif(ANDROID_ABI STREQUAL "x86")
+    list(APPEND TEE_ASM_SOURCES asm/x86/syscall_fastpath.S)
+elseif(ANDROID_ABI STREQUAL "x86_64")
+    list(APPEND TEE_ASM_SOURCES asm/x86_64/syscall_fastpath.S)
 endif()
 
 add_library(duckdetector SHARED
