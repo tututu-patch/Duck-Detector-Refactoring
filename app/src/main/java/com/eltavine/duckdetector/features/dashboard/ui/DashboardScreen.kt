@@ -1,5 +1,7 @@
 package com.eltavine.duckdetector.features.dashboard.ui
 
+import android.content.ClipData
+import android.widget.Toast
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.rounded.Badge
@@ -31,11 +33,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import compose.icons.SimpleIcons
+import compose.icons.simpleicons.Tencentqq
 import com.eltavine.duckdetector.BuildConfig
 import com.eltavine.duckdetector.core.ui.model.DetectionSeverity
 import com.eltavine.duckdetector.R
@@ -64,6 +70,10 @@ import com.eltavine.duckdetector.features.tee.ui.model.TeeFooterActionId
 import com.eltavine.duckdetector.features.virtualization.ui.card.VirtualizationDetectorCard
 import com.eltavine.duckdetector.features.zygisk.ui.card.ZygiskDetectorCard
 import com.eltavine.duckdetector.ui.theme.ShapeTokens
+
+private const val DUCK_DETECTOR_QQ_GROUP = "1079283524"
+private const val DUCK_DETECTOR_QQ_GROUP_URL =
+    "https://qun.qq.com/universal-share/share?ac=1&authKey=VWdSICnmxMiNF1t409UcE%2FjdQVeorZKvrKP85I2pepXf4rfv9IFfdAw8kAuMdk5v&busi_data=eyJncm91cENvZGUiOiIxMDc5MjgzNTI0IiwidG9rZW4iOiJ2Q3VSSll2QndhK3JoZlhHZFU4VmxUSFREdjBVVHhFNHlTbXVPVDkzY0twTHlJTldSZVFlUmxncjlnM0Rac2dwIiwidWluIjoiMzMzNDcxMzIzMyJ9&data=ms9NmidW7tH7vZrZkYOux0z9cAUWBOp4THmPYdBeCpt6sBVyd1oP9E3lL-0yToQMBBTK3X7aZQ9SLnzxEmxWlQ&svctype=4&tempid=h5_group_info"
 
 @Composable
 fun DashboardScreen(
@@ -241,6 +251,7 @@ private fun DashboardLoadingOverlay(
 @Composable
 private fun BrandHeader() {
     val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -296,13 +307,31 @@ private fun BrandHeader() {
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
+            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             SocialGlyph(
                 iconRes = R.drawable.ic_telegram,
                 onClick = {
                     uriHandler.openUri("https://t.me/duck_detector")
+                },
+            )
+            SocialGlyph(
+                iconVector = SimpleIcons.Tencentqq,
+                onClick = {
+                    context.getSystemService(android.content.ClipboardManager::class.java)
+                        ?.setPrimaryClip(
+                            ClipData.newPlainText(
+                                "Duck Detector QQ group",
+                                DUCK_DETECTOR_QQ_GROUP,
+                            ),
+                        )
+                    Toast.makeText(
+                        context,
+                        "QQ group number copied: $DUCK_DETECTOR_QQ_GROUP",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                    uriHandler.openUri(DUCK_DETECTOR_QQ_GROUP_URL)
                 },
             )
         }
@@ -395,7 +424,8 @@ private fun formatBuildTimeUtc(raw: String): String {
 
 @Composable
 private fun SocialGlyph(
-    iconRes: Int,
+    iconRes: Int? = null,
+    iconVector: ImageVector? = null,
     onClick: () -> Unit,
 ) {
     Surface(
@@ -409,11 +439,19 @@ private fun SocialGlyph(
                 .padding(10.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                painter = painterResource(iconRes),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            when {
+                iconVector != null -> Icon(
+                    imageVector = iconVector,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                iconRes != null -> Icon(
+                    painter = painterResource(iconRes),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
