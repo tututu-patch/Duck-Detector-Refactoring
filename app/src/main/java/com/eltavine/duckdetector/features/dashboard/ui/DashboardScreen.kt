@@ -2,6 +2,8 @@ package com.eltavine.duckdetector.features.dashboard.ui
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material.icons.rounded.Badge
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -280,12 +282,14 @@ private fun BrandHeader() {
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                 )
-                WrapSafeText(
+                BrandMetaLine(
+                    icon = Icons.Rounded.Badge,
                     text = "${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE})",
-                    modifier = Modifier.fillMaxWidth(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
+                )
+                BuildTimeMetaBlock(
+                    icon = Icons.Rounded.Schedule,
+                    label = "Build Time (UTC)",
+                    time = formatBuildTimeUtc(BuildConfig.BUILD_TIME_UTC),
                 )
             }
         }
@@ -302,6 +306,90 @@ private fun BrandHeader() {
                 },
             )
         }
+    }
+}
+
+@Composable
+private fun BrandMetaLine(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(14.dp),
+        )
+        Spacer(modifier = Modifier.size(6.dp))
+        WrapSafeText(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun BuildTimeMetaBlock(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    time: String,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(14.dp),
+            )
+            Spacer(modifier = Modifier.size(6.dp))
+            WrapSafeText(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
+        WrapSafeText(
+            text = time,
+            modifier = Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+private fun formatBuildTimeUtc(raw: String): String {
+    if (raw.length != 14 || raw.any { !it.isDigit() }) {
+        return raw
+    }
+    return buildString {
+        append(raw.substring(0, 4))
+        append(' ')
+        append(raw.substring(4, 6))
+        append(' ')
+        append(raw.substring(6, 8))
+        append(' ')
+        append(raw.substring(8, 10))
+        append(' ')
+        append(raw.substring(10, 12))
+        append(' ')
+        append(raw.substring(12, 14))
     }
 }
 

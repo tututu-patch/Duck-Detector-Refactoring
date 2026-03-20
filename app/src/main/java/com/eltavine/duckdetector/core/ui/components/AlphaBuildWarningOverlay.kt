@@ -68,12 +68,15 @@ private const val APP_ERRORS_TRACKING_TELEGRAM =
 @Composable
 fun AlphaBuildWarningOverlay(
     versionName: String = BuildConfig.VERSION_NAME,
+    forceVisible: Boolean? = null,
+    onDismissed: (() -> Unit)? = null,
 ) {
     val shouldShow = remember(versionName) { isAlphaVersion(versionName) }
-    var visible by rememberSaveable(versionName) { mutableStateOf(shouldShow) }
+    var internalVisible by rememberSaveable(versionName) { mutableStateOf(shouldShow) }
     var remainingSeconds by rememberSaveable(versionName) {
         mutableIntStateOf(if (shouldShow) 3 else 0)
     }
+    val visible = forceVisible ?: internalVisible
 
     LaunchedEffect(visible, shouldShow) {
         if (!visible || !shouldShow) {
@@ -93,11 +96,17 @@ fun AlphaBuildWarningOverlay(
     val canDismiss = remainingSeconds == 0
     val uriHandler = LocalUriHandler.current
     val scrollState = rememberScrollState()
+    val dismissOverlay = {
+        if (forceVisible == null) {
+            internalVisible = false
+        }
+        onDismissed?.invoke()
+    }
 
     Dialog(
         onDismissRequest = {
             if (canDismiss) {
-                visible = false
+                dismissOverlay()
             }
         },
         properties = DialogProperties(
@@ -216,7 +225,11 @@ fun AlphaBuildWarningOverlay(
                     }
 
                     Button(
-                        onClick = { visible = false },
+                        onClick = {
+                            if (canDismiss) {
+                                dismissOverlay()
+                            }
+                        },
                         enabled = canDismiss,
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(

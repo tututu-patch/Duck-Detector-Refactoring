@@ -42,8 +42,18 @@ class DangerousAppsCardModelMapper {
     private fun buildSubtitle(report: DangerousAppsReport): String {
         val base = "${report.targets.size} legacy targets"
         return when (report.packageVisibility) {
-            DangerousPackageVisibility.FULL -> "$base · full PM inventory"
-            DangerousPackageVisibility.RESTRICTED -> "$base · scoped PM inventory"
+            DangerousPackageVisibility.FULL -> if (report.packageManagerVisibleCount > 0) {
+                "$base · full PM inventory · ${report.packageManagerVisibleCount} visible"
+            } else {
+                "$base · full PM inventory"
+            }
+
+            DangerousPackageVisibility.RESTRICTED -> if (report.packageManagerVisibleCount > 0) {
+                "$base · scoped PM inventory · ${report.packageManagerVisibleCount} visible"
+            } else {
+                "$base · scoped PM inventory"
+            }
+
             DangerousPackageVisibility.UNKNOWN -> base
         }
     }
@@ -55,6 +65,7 @@ class DangerousAppsCardModelMapper {
             DangerousAppsStage.READY -> when {
                 report.hiddenCount > 0 -> "HMA-style concealment detected"
                 report.detectedCount > 0 -> "${report.detectedCount} risky package(s) surfaced"
+                report.suspiciousLowPmInventory -> "Package inventory unusually small"
                 report.packageVisibility == DangerousPackageVisibility.RESTRICTED -> "Inventory visibility limited"
                 else -> "No known risky packages"
             }
@@ -75,9 +86,22 @@ class DangerousAppsCardModelMapper {
                     "${report.hiddenCount} package(s) were visible to non-PackageManager probes but absent from PackageManager."
 
                 report.detectedCount > 0 ->
-                    "Matched ${report.detectedCount} package(s) across ${
-                        report.findings.map { it.target.category }.distinct().size
-                    } category(ies). All package hits stay warning-level unless HMA concealment is present."
+                    buildString {
+                        append(
+                            "Matched ${report.detectedCount} package(s) across ${
+                                report.findings.map { it.target.category }.distinct().size
+                            } category(ies). All package hits stay warning-level unless HMA concealment is present."
+                        )
+                        if (report.suspiciousLowPmInventory) {
+                            append(' ')
+                            append(
+                                "PackageManager still exposed only ${report.packageManagerVisibleCount} visible packages, which is unusually low and can happen under HMA-style whitelist filtering."
+                            )
+                        }
+                    }
+
+                report.suspiciousLowPmInventory ->
+                    "PackageManager reported a full inventory surface but returned only ${report.packageManagerVisibleCount} visible packages. That is unusually low for a modern device and can happen under HMA-style whitelist filtering."
 
                 report.packageVisibility == DangerousPackageVisibility.RESTRICTED ->
                     "Storage-side probes still ran, but a clean result may under-report installed tools when PackageManager visibility is scoped."
@@ -97,9 +121,14 @@ class DangerousAppsCardModelMapper {
             ),
             DangerousAppsHeaderFactModel(
                 label = "PM",
-                value = visibilityLabel(report.packageVisibility),
+                value = visibilityFactValue(report),
                 status = when (report.packageVisibility) {
-                    DangerousPackageVisibility.FULL -> DetectorStatus.allClear()
+                    DangerousPackageVisibility.FULL -> if (report.suspiciousLowPmInventory) {
+                        DetectorStatus.warning()
+                    } else {
+                        DetectorStatus.allClear()
+                    }
+
                     DangerousPackageVisibility.RESTRICTED -> DetectorStatus.info(InfoKind.ERROR)
                     DangerousPackageVisibility.UNKNOWN -> DetectorStatus.info(InfoKind.SUPPORT)
                 },
@@ -176,9 +205,26 @@ class DangerousAppsCardModelMapper {
         return listOf(
             ContextItemModel("Inventory", "${report.targets.size} legacy packages"),
             ContextItemModel("PackageManager", visibilityLongLabel(report.packageVisibility)),
+            ContextItemModel(
+                "Visible packages",
+                if (report.packageManagerVisibleCount > 0) {
+                    report.packageManagerVisibleCount.toString()
+                } else {
+                    "Unavailable"
+                },
+            ),
             ContextItemModel("Categories", categories),
             ContextItemModel("Probe families", probeSummary),
         )
+    }
+
+    private fun visibilityFactValue(report: DangerousAppsReport): String {
+        val base = visibilityLabel(report.packageVisibility)
+        return if (report.packageManagerVisibleCount > 0) {
+            "$base · ${report.packageManagerVisibleCount}"
+        } else {
+            base
+        }
     }
 
     private fun visibilityLabel(visibility: DangerousPackageVisibility): String {
@@ -204,6 +250,7 @@ class DangerousAppsCardModelMapper {
             DangerousAppsStage.READY -> when {
                 hiddenCount > 0 -> DetectorStatus.danger()
                 detectedCount > 0 -> DetectorStatus.warning()
+                suspiciousLowPmInventory -> DetectorStatus.warning()
                 packageVisibility == DangerousPackageVisibility.RESTRICTED -> DetectorStatus.info(
                     InfoKind.ERROR
                 )

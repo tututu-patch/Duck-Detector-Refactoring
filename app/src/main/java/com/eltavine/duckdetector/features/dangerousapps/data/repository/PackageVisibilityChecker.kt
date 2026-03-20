@@ -21,4 +21,19 @@ object PackageVisibilityChecker {
     fun getInstalledPackages(context: Context): Set<String> {
         return InstalledPackageVisibilityChecker.getInstalledPackages(context)
     }
+
+    fun hasSuspiciouslyLowInventory(
+        packageVisibility: DangerousPackageVisibility,
+        installedPackageCount: Int,
+    ): Boolean {
+        val visibility = when (packageVisibility) {
+            DangerousPackageVisibility.FULL -> InstalledPackageVisibility.FULL
+            DangerousPackageVisibility.RESTRICTED -> InstalledPackageVisibility.RESTRICTED
+            DangerousPackageVisibility.UNKNOWN -> InstalledPackageVisibility.UNKNOWN
+        }
+        return InstalledPackageVisibilityChecker.hasSuspiciouslyLowInventory(
+            visibility = visibility,
+            installedPackageCount = installedPackageCount,
+        )
+    }
 }

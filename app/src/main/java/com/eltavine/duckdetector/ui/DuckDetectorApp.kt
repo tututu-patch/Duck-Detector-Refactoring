@@ -5,11 +5,8 @@ import android.os.Build
 import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -30,15 +27,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.eltavine.duckdetector.BuildConfig
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import com.eltavine.duckdetector.core.notifications.ScanNotificationPermissions
 import com.eltavine.duckdetector.core.notifications.ScanProgressNotificationSnapshot
 import com.eltavine.duckdetector.core.notifications.ScanProgressNotifier
 import com.eltavine.duckdetector.core.notifications.preferences.ScanNotificationConsentStore
 import com.eltavine.duckdetector.core.notifications.preferences.ScanNotificationPrefs
+import com.eltavine.duckdetector.core.packagevisibility.InstalledPackageVisibilityChecker
+import com.eltavine.duckdetector.core.packagevisibility.preferences.PackageVisibilityReviewPrefs
+import com.eltavine.duckdetector.core.packagevisibility.preferences.PackageVisibilityReviewStore
+import com.eltavine.duckdetector.core.startup.legal.AgreementAcceptancePrefs
+import com.eltavine.duckdetector.core.startup.legal.AgreementAcceptanceStore
+import com.eltavine.duckdetector.core.startup.legal.AgreementScreen
 import com.eltavine.duckdetector.core.ui.components.AlphaBuildBanner
 import com.eltavine.duckdetector.core.ui.components.AlphaBuildWarningOverlay
 import com.eltavine.duckdetector.core.ui.components.ScreenshotWatermarkOverlay
-import com.eltavine.duckdetector.core.ui.components.WrapSafeText
+import com.eltavine.duckdetector.core.ui.components.isAlphaVersion
 import com.eltavine.duckdetector.features.bootloader.presentation.BootloaderUiStage
 import com.eltavine.duckdetector.features.bootloader.presentation.BootloaderUiState
 import com.eltavine.duckdetector.features.bootloader.presentation.BootloaderViewModel
@@ -90,7 +97,6 @@ import com.eltavine.duckdetector.features.tee.data.preferences.TeeNetworkPrefs
 import com.eltavine.duckdetector.features.tee.presentation.TeeUiStage
 import com.eltavine.duckdetector.features.tee.presentation.TeeUiState
 import com.eltavine.duckdetector.features.tee.presentation.TeeViewModel
-import com.eltavine.duckdetector.features.tee.ui.CrlNetworkConsentDialog
 import com.eltavine.duckdetector.features.virtualization.presentation.VirtualizationUiStage
 import com.eltavine.duckdetector.features.virtualization.presentation.VirtualizationUiState
 import com.eltavine.duckdetector.features.virtualization.presentation.VirtualizationViewModel
@@ -100,13 +106,15 @@ import com.eltavine.duckdetector.features.zygisk.presentation.ZygiskViewModel
 import com.eltavine.duckdetector.ui.shell.AppDestination
 import com.eltavine.duckdetector.ui.shell.DetectorResultNoticeDialog
 import com.eltavine.duckdetector.ui.shell.FloatingAppTabSwitcher
-import com.eltavine.duckdetector.ui.shell.LiveUpdateConsentDialog
-import com.eltavine.duckdetector.ui.shell.NotificationPermissionConsentDialog
 import com.eltavine.duckdetector.ui.shell.StartupGateState
+import com.eltavine.duckdetector.ui.shell.StartupPackageVisibilityState
+import com.eltavine.duckdetector.ui.shell.StartupPolicyScreen
 import com.eltavine.duckdetector.ui.shell.resolveStartupGateState
 import com.eltavine.duckdetector.ui.shell.shouldShowDetectorResultNotice
 import com.eltavine.duckdetector.ui.shell.shouldCreateDetectorViewModels
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun DuckDetectorApp() {
@@ -123,11 +131,32 @@ fun DuckDetectorApp() {
 
     val context = LocalContext.current
     val appContext = context.applicationContext
+    val agreementStore = remember(appContext) { AgreementAcceptanceStore.getInstance(appContext) }
     val consentStore = remember(appContext) { TeeNetworkConsentStore.getInstance(appContext) }
     val notificationConsentStore = remember(appContext) {
         ScanNotificationConsentStore.getInstance(appContext)
     }
-    val teePrefs by produceState<TeeNetworkPrefs?>(initialValue = null, key1 = consentStore) {
+    val packageVisibilityReviewStore = remember(appContext) {
+        PackageVisibilityReviewStore.getInstance(appContext)
+    }
+    val agreementPrefs by produceState<AgreementAcceptancePrefs?>(
+        initialValue = null,
+        key1 = agreementStore,
+    ) {
+        agreementStore.prefs.collect { currentPrefs ->
+            value = currentPrefs
+        }
+    }
+    val agreementAccepted = agreementPrefs?.accepted == true
+    val teePrefs by produceState<TeeNetworkPrefs?>(
+        initialValue = null,
+        key1 = consentStore,
+        key2 = agreementAccepted,
+    ) {
+        if (!agreementAccepted) {
+            value = null
+            return@produceState
+        }
         consentStore.prefs.collect { currentPrefs ->
             value = currentPrefs
         }
@@ -135,20 +164,85 @@ fun DuckDetectorApp() {
     val notificationPrefs by produceState<ScanNotificationPrefs?>(
         initialValue = null,
         key1 = notificationConsentStore,
+        key2 = agreementAccepted,
     ) {
+        if (!agreementAccepted) {
+            value = null
+            return@produceState
+        }
         notificationConsentStore.prefs.collect { currentPrefs ->
             value = currentPrefs
+        }
+    }
+    val packageVisibilityReviewPrefs by produceState<PackageVisibilityReviewPrefs?>(
+        initialValue = null,
+        key1 = packageVisibilityReviewStore,
+        key2 = agreementAccepted,
+    ) {
+        if (!agreementAccepted) {
+            value = null
+            return@produceState
+        }
+        packageVisibilityReviewStore.prefs.collect { currentPrefs ->
+            value = currentPrefs
+        }
+    }
+    val packageVisibilityState by produceState<StartupPackageVisibilityState?>(
+        initialValue = null,
+        key1 = appContext,
+        key2 = agreementAccepted,
+    ) {
+        if (!agreementAccepted) {
+            value = null
+            return@produceState
+        }
+        value = withContext(Dispatchers.IO) {
+            val installedPackages =
+                InstalledPackageVisibilityChecker.getInstalledPackages(appContext)
+            val installedPackageCount = installedPackages.size
+            val visibility = InstalledPackageVisibilityChecker.detect(
+                context = appContext,
+                installedPackageCount = installedPackageCount,
+            )
+            StartupPackageVisibilityState(
+                visibility = visibility,
+                visiblePackageCount = installedPackageCount,
+                suspiciouslyLowInventory = InstalledPackageVisibilityChecker
+                    .hasSuspiciouslyLowInventory(
+                        visibility = visibility,
+                        installedPackageCount = installedPackageCount,
+                    ),
+            )
         }
     }
     var notificationPermissionState by remember {
         mutableStateOf(ScanNotificationPermissions.read(appContext))
     }
-    val gateState = remember(teePrefs, notificationPrefs, notificationPermissionState) {
+    val gateState = remember(
+        teePrefs,
+        notificationPrefs,
+        notificationPermissionState,
+        packageVisibilityState,
+        packageVisibilityReviewPrefs,
+    ) {
         resolveStartupGateState(
             teePrefs = teePrefs,
             notificationPrefs = notificationPrefs,
             notificationPermissionState = notificationPermissionState,
+            packageVisibilityLoaded = packageVisibilityState != null &&
+                    packageVisibilityReviewPrefs != null,
+            packageVisibility = packageVisibilityState?.visibility
+                ?: com.eltavine.duckdetector.core.packagevisibility.InstalledPackageVisibility.UNKNOWN,
+            packageVisibilityReviewAcknowledged =
+                packageVisibilityReviewPrefs?.restrictedInventoryAcknowledged == true,
         )
+    }
+    val startupPoliciesReady = shouldCreateDetectorViewModels(gateState)
+    val requiresAlphaAcknowledgement = remember(BuildConfig.VERSION_NAME) {
+        isAlphaVersion(BuildConfig.VERSION_NAME)
+    }
+    var alphaAcknowledged by rememberSaveable(BuildConfig.VERSION_NAME) {
+        mutableStateOf(false)
     }
     var destination by rememberSaveable { mutableStateOf(AppDestination.MAIN) }
     val scope = rememberCoroutineScope()
@@ -183,81 +277,108 @@ fun DuckDetectorApp() {
 
     Surface {
         Box(modifier = Modifier.fillMaxSize()) {
-            if (shouldCreateDetectorViewModels(gateState)) {
-                AppReadyShell(
-                    destination = destination,
-                    onSelectDestination = { selected -> destination = selected },
-                    networkPrefs = requireNotNull(teePrefs),
-                    consentStore = consentStore,
-                    notificationPermissionState = notificationPermissionState,
-                )
-            } else {
-                StartupGateBackdrop(
-                    gateState = gateState,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
+            when {
+                agreementPrefs == null -> {
+                    StartupBootstrapLoadingScreen(modifier = Modifier.fillMaxSize())
+                }
 
-            if (gateState == StartupGateState.REQUIRES_NOTIFICATION_DECISION) {
-                NotificationPermissionConsentDialog(
-                    onAllowNotifications = {
-                        if (Build.VERSION.SDK_INT >= 33) {
-                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        } else {
+                !agreementAccepted -> {
+                    AgreementScreen(
+                        onAgree = {
+                            scope.launch {
+                                agreementStore.accept()
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+
+                startupPoliciesReady -> {
+                    AppReadyShell(
+                        destination = destination,
+                        onSelectDestination = { selected -> destination = selected },
+                        networkPrefs = requireNotNull(teePrefs),
+                        consentStore = consentStore,
+                        notificationPermissionState = notificationPermissionState,
+                    )
+                }
+
+                else -> {
+                    StartupPolicyScreen(
+                        gateState = gateState,
+                        notificationPrefs = notificationPrefs,
+                        notificationPermissionState = notificationPermissionState,
+                        teePrefs = teePrefs,
+                        packageVisibilityState = packageVisibilityState,
+                        packageVisibilityReviewAcknowledged =
+                            packageVisibilityReviewPrefs?.restrictedInventoryAcknowledged == true,
+                        onAllowNotifications = {
+                            if (Build.VERSION.SDK_INT >= 33) {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                scope.launch {
+                                    notificationConsentStore.markNotificationsPrompted()
+                                }
+                            }
+                        },
+                        onSkipNotifications = {
                             scope.launch {
                                 notificationConsentStore.markNotificationsPrompted()
                             }
-                        }
-                    },
-                    onSkipNotifications = {
-                        scope.launch {
-                            notificationConsentStore.markNotificationsPrompted()
-                        }
-                    },
-                )
-            }
-
-            if (gateState == StartupGateState.REQUIRES_LIVE_UPDATE_DECISION) {
-                LiveUpdateConsentDialog(
-                    onOpenSettings = {
-                        val intent = ScanNotificationPermissions
-                            .appNotificationPromotionSettingsIntent(appContext)
-                        val canOpenSettings =
-                            intent.resolveActivity(appContext.packageManager) != null
-                        if (canOpenSettings) {
-                            liveUpdateSettingsLauncher.launch(intent)
-                        } else {
+                        },
+                        onOpenLiveUpdateSettings = {
+                            val intent = ScanNotificationPermissions
+                                .appNotificationPromotionSettingsIntent(appContext)
+                            val canOpenSettings =
+                                intent.resolveActivity(appContext.packageManager) != null
+                            if (canOpenSettings) {
+                                liveUpdateSettingsLauncher.launch(intent)
+                            } else {
+                                scope.launch {
+                                    notificationConsentStore.markLiveUpdatesPrompted()
+                                }
+                            }
+                        },
+                        onUseRegularNotifications = {
                             scope.launch {
                                 notificationConsentStore.markLiveUpdatesPrompted()
                             }
-                        }
-                    },
-                    onUseRegularNotifications = {
-                        scope.launch {
-                            notificationConsentStore.markLiveUpdatesPrompted()
-                        }
-                    },
-                )
-            }
-
-            if (gateState == StartupGateState.REQUIRES_CRL_DECISION) {
-                CrlNetworkConsentDialog(
-                    onAllowNetwork = {
-                        scope.launch {
-                            consentStore.setConsent(true)
-                        }
-                    },
-                    onLocalOnly = {
-                        scope.launch {
-                            consentStore.setConsent(false)
-                        }
-                    },
-                )
+                        },
+                        onAllowCrlNetwork = {
+                            scope.launch {
+                                consentStore.setConsent(true)
+                            }
+                        },
+                        onUseLocalCrlOnly = {
+                            scope.launch {
+                                consentStore.setConsent(false)
+                            }
+                        },
+                        onAcknowledgePackageVisibility = {
+                            scope.launch {
+                                packageVisibilityReviewStore.acknowledgeRestrictedInventory()
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
 
             ScreenshotWatermarkOverlay()
-            AlphaBuildBanner()
-            AlphaBuildWarningOverlay()
+
+            if (agreementAccepted && startupPoliciesReady) {
+                AlphaBuildBanner()
+            }
+
+            AlphaBuildWarningOverlay(
+                forceVisible = agreementAccepted &&
+                        startupPoliciesReady &&
+                        requiresAlphaAcknowledgement &&
+                        !alphaAcknowledged,
+                onDismissed = {
+                    alphaAcknowledged = true
+                },
+            )
         }
     }
 }
@@ -534,41 +655,25 @@ private fun AppReadyShell(
 }
 
 @Composable
-private fun StartupGateBackdrop(
-    gateState: StartupGateState,
+private fun StartupBootstrapLoadingScreen(
     modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier.background(MaterialTheme.colorScheme.background),
+        modifier = modifier,
         contentAlignment = Alignment.Center,
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            if (gateState == StartupGateState.LOADING) {
-                CircularProgressIndicator()
-            }
-            WrapSafeText(
-                text = "Duck Detector",
-                style = MaterialTheme.typography.displaySmall,
+            CircularProgressIndicator()
+            Text(
+                text = "Preparing startup",
+                style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            WrapSafeText(
-                text = when (gateState) {
-                    StartupGateState.LOADING -> "Loading startup verification policy."
-                    StartupGateState.REQUIRES_NOTIFICATION_DECISION ->
-                        "Waiting for your scan-notification decision."
-
-                    StartupGateState.REQUIRES_LIVE_UPDATE_DECISION ->
-                        "Waiting for your Live Update notification decision."
-
-                    StartupGateState.REQUIRES_CRL_DECISION ->
-                        "Waiting for your CRL networking decision."
-
-                    StartupGateState.READY -> ""
-                },
+            Text(
+                text = "Loading agreement state before startup policy review.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

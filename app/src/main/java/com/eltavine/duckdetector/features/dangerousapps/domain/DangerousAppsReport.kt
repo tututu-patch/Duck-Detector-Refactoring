@@ -50,6 +50,8 @@ data class DangerousAppFinding(
 data class DangerousAppsReport(
     val stage: DangerousAppsStage,
     val packageVisibility: DangerousPackageVisibility,
+    val packageManagerVisibleCount: Int,
+    val suspiciousLowPmInventory: Boolean,
     val targets: List<DangerousAppTarget>,
     val findings: List<DangerousAppFinding>,
     val hiddenFromPackageManager: List<DangerousAppFinding>,
@@ -67,6 +69,8 @@ data class DangerousAppsReport(
             return DangerousAppsReport(
                 stage = DangerousAppsStage.LOADING,
                 packageVisibility = DangerousPackageVisibility.UNKNOWN,
+                packageManagerVisibleCount = 0,
+                suspiciousLowPmInventory = false,
                 targets = targets,
                 findings = emptyList(),
                 hiddenFromPackageManager = emptyList(),
@@ -81,6 +85,8 @@ data class DangerousAppsReport(
             return DangerousAppsReport(
                 stage = DangerousAppsStage.FAILED,
                 packageVisibility = DangerousPackageVisibility.UNKNOWN,
+                packageManagerVisibleCount = 0,
+                suspiciousLowPmInventory = false,
                 targets = targets,
                 findings = emptyList(),
                 hiddenFromPackageManager = emptyList(),

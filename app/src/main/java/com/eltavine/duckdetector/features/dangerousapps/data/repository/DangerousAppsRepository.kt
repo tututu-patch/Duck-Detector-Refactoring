@@ -42,10 +42,18 @@ class DangerousAppsRepository(
         val issues = mutableListOf<String>()
 
         val installedPackages = PackageVisibilityChecker.getInstalledPackages(context)
-        val packageVisibility = PackageVisibilityChecker.detect(context, installedPackages.size)
+        val packageManagerVisibleCount = installedPackages.size
+        val packageVisibility = PackageVisibilityChecker.detect(context, packageManagerVisibleCount)
+        val suspiciousLowPmInventory = PackageVisibilityChecker.hasSuspiciouslyLowInventory(
+            packageVisibility = packageVisibility,
+            installedPackageCount = packageManagerVisibleCount,
+        )
 
         if (packageVisibility == DangerousPackageVisibility.RESTRICTED) {
             issues += "PackageManager visibility is restricted on this device profile."
+        }
+        if (suspiciousLowPmInventory) {
+            issues += "PackageManager returned only $packageManagerVisibleCount visible packages despite a full inventory result. This can happen under HMA-style whitelist filtering."
         }
 
         if (packageVisibility == DangerousPackageVisibility.FULL) {
@@ -158,6 +166,8 @@ class DangerousAppsRepository(
         return DangerousAppsReport(
             stage = DangerousAppsStage.READY,
             packageVisibility = packageVisibility,
+            packageManagerVisibleCount = packageManagerVisibleCount,
+            suspiciousLowPmInventory = suspiciousLowPmInventory,
             targets = targets,
             findings = findings,
             hiddenFromPackageManager = hiddenFromPackageManager,

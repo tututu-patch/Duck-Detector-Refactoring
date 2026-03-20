@@ -18,4 +18,20 @@
     <string name="card_action_view_details">View details</string>
     <string name="card_action_review_evidence">Review evidence</string>
     <string name="card_action_certificate_chain">Certificate chain</string>
+    <string name="user_agreement">User Agreement</string>
+    <string name="disclaimer">&amp; Disclaimer</string>
+    <string name="please_read_carefully">Please read carefully before continuing</string>
+    <string name="user_agreement_title">User Agreement</string>
+    <string name="user_agreement_content" formatted="false">By using Duck Detector, you agree to the following terms:&#10;&#10;1. Purpose of use&#10;This application is designed solely for educational and personal security-assessment purposes. It helps users understand the security status of their own devices.&#10;&#10;2. No warranty&#10;This application is provided &quot;as is&quot; without any warranties, express or implied. The developers do not guarantee the accuracy, completeness, or reliability of detection results.&#10;&#10;3. User responsibility&#10;You are solely responsible for how you use this application and any consequences that may arise from its use.&#10;&#10;4. Compliance with laws&#10;You agree to use this application in compliance with all applicable local, national, and international laws and regulations.</string>
+    <string name="disclaimer_title">Disclaimer</string>
+    <string name="disclaimer_content" formatted="false">IMPORTANT NOTICE:&#10;&#10;1. Detection limitations&#10;Duck Detector uses various methods to detect device security status, but no detection method is 100&#37; accurate. Results should be considered indicators rather than definitive assessments.&#10;&#10;2. False positives and false negatives&#10;The application may produce false positives or false negatives. Always use professional security tools and your own verification for comprehensive assessment.&#10;&#10;3. No liability&#10;The developers, contributors, and distributors of Duck Detector shall not be held liable for any direct, indirect, incidental, special, or consequential damages arising from the use or inability to use this application.&#10;&#10;4. Third-party services&#10;If you allow online revocation checks, the app may contact the Google attestation revocation endpoint. Security scans themselves still run locally on your device, and detector findings are not intentionally uploaded as scan telemetry.</string>
+    <string name="privacy_notice_title">Privacy Notice</string>
+    <string name="privacy_notice_content" formatted="false">Privacy summary: Security checks run locally on your device. Detector findings are not intentionally uploaded as scan telemetry. If you allow online revocation checks, the app may contact the Google attestation revocation endpoint.</string>
+    <string name="timer_elapsed">30 seconds elapsed</string>
+    <string name="timer_waiting">Please wait %1$ds</string>
+    <string name="fully_reviewed">Fully reviewed</string>
+    <string name="scroll_to_bottom">Scroll to bottom</string>
+    <string name="i_agree_continue">I Agree &amp; Continue</string>
+    <string name="complete_all_conditions">Complete all conditions</string>
+    <string name="agreement_acknowledgement">By continuing, you acknowledge that you have read and agree to these terms.</string>
 </resources>

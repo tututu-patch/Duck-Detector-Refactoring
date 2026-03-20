@@ -19,6 +19,7 @@ bouncycastle = "1.83"
 soterWrapper = "2.0.7"
 coroutines = "1.10.2"
 composeIcons = "1.1.1"
+aboutLibraries = "13.2.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -45,6 +46,7 @@ bouncycastle-bcprov = { group = "org.bouncycastle", name = "bcprov-jdk18on", ver
 soter-wrapper = { group = "com.github.Tencent.soter", name = "soter-wrapper", version.ref = "soterWrapper" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 compose-icons-simple = { module = "br.com.devsrsouza.compose.icons:simple-icons-android", version.ref = "composeIcons" }
+aboutlibraries-compose-m3 = { module = "com.mikepenz:aboutlibraries-compose-m3", version.ref = "aboutLibraries" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

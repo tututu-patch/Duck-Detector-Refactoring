@@ -2,6 +2,7 @@ package com.eltavine.duckdetector.ui.shell
 
 import com.eltavine.duckdetector.core.notifications.ScanNotificationPermissionState
 import com.eltavine.duckdetector.core.notifications.preferences.ScanNotificationPrefs
+import com.eltavine.duckdetector.core.packagevisibility.InstalledPackageVisibility
 import com.eltavine.duckdetector.features.tee.data.preferences.TeeNetworkPrefs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -20,6 +21,9 @@ class AppShellStateTest {
                 liveUpdatesSupported = true,
                 liveUpdatesGranted = false,
             ),
+            packageVisibilityLoaded = false,
+            packageVisibility = InstalledPackageVisibility.UNKNOWN,
+            packageVisibilityReviewAcknowledged = false,
         )
 
         assertEquals(StartupGateState.LOADING, gateState)
@@ -44,9 +48,12 @@ class AppShellStateTest {
                 liveUpdatesSupported = true,
                 liveUpdatesGranted = false,
             ),
+            packageVisibilityLoaded = true,
+            packageVisibility = InstalledPackageVisibility.FULL,
+            packageVisibilityReviewAcknowledged = false,
         )
 
-        assertEquals(StartupGateState.REQUIRES_NOTIFICATION_DECISION, gateState)
+        assertEquals(StartupGateState.REQUIRES_POLICY_REVIEW, gateState)
         assertFalse(shouldCreateDetectorViewModels(gateState))
     }
 
@@ -68,9 +75,12 @@ class AppShellStateTest {
                 liveUpdatesSupported = true,
                 liveUpdatesGranted = false,
             ),
+            packageVisibilityLoaded = true,
+            packageVisibility = InstalledPackageVisibility.FULL,
+            packageVisibilityReviewAcknowledged = false,
         )
 
-        assertEquals(StartupGateState.REQUIRES_LIVE_UPDATE_DECISION, gateState)
+        assertEquals(StartupGateState.REQUIRES_POLICY_REVIEW, gateState)
         assertFalse(shouldCreateDetectorViewModels(gateState))
     }
 
@@ -92,9 +102,39 @@ class AppShellStateTest {
                 liveUpdatesSupported = true,
                 liveUpdatesGranted = true,
             ),
+            packageVisibilityLoaded = true,
+            packageVisibility = InstalledPackageVisibility.FULL,
+            packageVisibilityReviewAcknowledged = false,
         )
 
-        assertEquals(StartupGateState.REQUIRES_CRL_DECISION, gateState)
+        assertEquals(StartupGateState.REQUIRES_POLICY_REVIEW, gateState)
+        assertFalse(shouldCreateDetectorViewModels(gateState))
+    }
+
+    @Test
+    fun `restricted package visibility requires explicit acknowledgement`() {
+        val gateState = resolveStartupGateState(
+            teePrefs = TeeNetworkPrefs(
+                consentAsked = true,
+                consentGranted = true,
+                crlCacheJson = null,
+                crlFetchedAt = 0L,
+            ),
+            notificationPrefs = ScanNotificationPrefs(
+                notificationsPrompted = true,
+                liveUpdatesPrompted = true,
+            ),
+            notificationPermissionState = ScanNotificationPermissionState(
+                notificationsGranted = true,
+                liveUpdatesSupported = true,
+                liveUpdatesGranted = true,
+            ),
+            packageVisibilityLoaded = true,
+            packageVisibility = InstalledPackageVisibility.RESTRICTED,
+            packageVisibilityReviewAcknowledged = false,
+        )
+
+        assertEquals(StartupGateState.REQUIRES_POLICY_REVIEW, gateState)
         assertFalse(shouldCreateDetectorViewModels(gateState))
     }
 
@@ -116,6 +156,9 @@ class AppShellStateTest {
                 liveUpdatesSupported = true,
                 liveUpdatesGranted = true,
             ),
+            packageVisibilityLoaded = true,
+            packageVisibility = InstalledPackageVisibility.FULL,
+            packageVisibilityReviewAcknowledged = true,
         )
 
         assertEquals(StartupGateState.READY, gateState)

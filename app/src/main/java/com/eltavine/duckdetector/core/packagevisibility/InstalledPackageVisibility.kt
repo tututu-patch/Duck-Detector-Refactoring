@@ -12,6 +12,9 @@ enum class InstalledPackageVisibility {
 
 object InstalledPackageVisibilityChecker {
 
+    const val FULL_VISIBILITY_MINIMUM_COUNT = 10
+    const val SUSPICIOUSLY_LOW_VISIBLE_PACKAGE_COUNT = 60
+
     fun detect(
         context: Context,
         installedPackageCount: Int,
@@ -19,11 +22,23 @@ object InstalledPackageVisibilityChecker {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             return InstalledPackageVisibility.FULL
         }
-        return if (installedPackageCount > 10) {
+        return if (installedPackageCount > FULL_VISIBILITY_MINIMUM_COUNT) {
             InstalledPackageVisibility.FULL
         } else {
             InstalledPackageVisibility.RESTRICTED
         }
+    }
+
+    fun hasSuspiciouslyLowInventory(
+        visibility: InstalledPackageVisibility,
+        installedPackageCount: Int,
+        sdkInt: Int = Build.VERSION.SDK_INT,
+    ): Boolean {
+        if (sdkInt < Build.VERSION_CODES.R) {
+            return false
+        }
+        return visibility == InstalledPackageVisibility.FULL &&
+                installedPackageCount < SUSPICIOUSLY_LOW_VISIBLE_PACKAGE_COUNT
     }
 
     @Suppress("DEPRECATION")
