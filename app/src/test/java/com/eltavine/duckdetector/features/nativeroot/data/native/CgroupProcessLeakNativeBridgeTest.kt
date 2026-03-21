@@ -20,7 +20,7 @@ class CgroupProcessLeakNativeBridgeTest {
                 PROC_DENIED=1
                 PATH=/sys/fs/cgroup/uid_2000	2000	1	2
                 PATH=/acct/uid_2000	2000	0	0
-                ENTRY=/sys/fs/cgroup/uid_2000	2000	321	0	lspd\tdaemon	/system/bin/lspd\0--service
+                ENTRY=/sys/fs/cgroup/uid_2000	2000	321	0	u:r:su:s0	lspd\tdaemon	/system/bin/lspd\0--service
             """.trimIndent(),
         )
 
@@ -31,6 +31,7 @@ class CgroupProcessLeakNativeBridgeTest {
         assertEquals(1, snapshot.procDeniedCount)
         assertEquals(2, snapshot.paths.size)
         assertEquals(1, snapshot.entries.size)
+        assertEquals("u:r:su:s0", snapshot.entries.single().procContext)
         assertEquals("lspd\tdaemon", snapshot.entries.single().comm)
         assertEquals("/system/bin/lspd\u0000--service", snapshot.entries.single().cmdline)
     }

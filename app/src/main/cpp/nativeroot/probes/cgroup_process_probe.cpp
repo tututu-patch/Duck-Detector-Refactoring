@@ -177,6 +177,7 @@ namespace duckdetector::nativeroot {
                         snapshot.process_count += 1;
 
                         const std::string status_text = read_proc_text(pid, "status", 4096);
+                        const std::string proc_context = read_proc_line(pid, "attr/current", 256);
                         const std::string comm = read_proc_line(pid, "comm", 256);
                         const std::string cmdline = read_proc_text(pid, "cmdline", 512);
                         if (status_text.empty()) {
@@ -191,6 +192,7 @@ namespace duckdetector::nativeroot {
                                             .cgroup_uid = uid,
                                             .pid = pid,
                                             .proc_uid = parse_status_uid(status_text),
+                                            .proc_context = proc_context,
                                             .comm = comm,
                                             .cmdline = cmdline,
                                     }

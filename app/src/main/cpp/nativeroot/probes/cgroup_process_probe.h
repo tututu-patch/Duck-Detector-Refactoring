@@ -18,6 +18,7 @@ namespace duckdetector::nativeroot {
         int cgroup_uid = -1;
         int pid = -1;
         int proc_uid = -1;
+        std::string proc_context;
         std::string comm;
         std::string cmdline;
     };

@@ -35,6 +35,7 @@ class CgroupProcessLeakProbeTest {
                         cgroupUid = 0,
                         pid = 4242,
                         procUid = 2000,
+                        procContext = "u:r:su:s0",
                         comm = "lspd",
                         cmdline = "/system/bin/lspd",
                     ),
@@ -47,7 +48,7 @@ class CgroupProcessLeakProbeTest {
             ),
         )
 
-        assertEquals(3, result.findings.size)
+        assertEquals(4, result.findings.size)
         assertTrue(
             result.findings.any {
                 it.label == "Cgroup UID mismatch" &&
@@ -62,11 +63,17 @@ class CgroupProcessLeakProbeTest {
         )
         assertTrue(
             result.findings.any {
+                it.label == "LSPosed root-context process" &&
+                        it.severity == NativeRootFindingSeverity.WARNING
+            },
+        )
+        assertTrue(
+            result.findings.any {
                 it.label == "Selective cgroup visibility" &&
                         it.severity == NativeRootFindingSeverity.DANGER
             },
         )
-        assertEquals(3, result.hitCount)
+        assertEquals(4, result.hitCount)
     }
 
     @Test
@@ -92,6 +99,7 @@ class CgroupProcessLeakProbeTest {
                         cgroupUid = 2000,
                         pid = 5151,
                         procUid = 2000,
+                        procContext = "u:r:untrusted_app:s0:c1,c2",
                         comm = "app_process64",
                         cmdline = "com.eltavine.duckdetector",
                     ),

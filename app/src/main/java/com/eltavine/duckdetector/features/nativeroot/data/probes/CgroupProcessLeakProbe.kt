@@ -58,6 +58,8 @@ class CgroupProcessLeakProbe(
 
         nativeSnapshot.entries.sortedWith(compareBy({ it.uidPath }, { it.pid })).forEach { entry ->
             val rule = suspiciousRules.firstOrNull { entry.matchText.contains(it.token) }
+            val contextRule =
+                suspiciousContextRules.firstOrNull { entry.contextText.contains(it.token) }
             val javaVisible = javaPidsByPath[entry.uidPath]?.contains(entry.pid) == true
 
             if (entry.procUid != null && entry.procUid != entry.cgroupUid) {
@@ -108,8 +110,38 @@ class CgroupProcessLeakProbe(
                 }
             }
 
+            if (contextRule != null) {
+                val key = "context|${contextRule.token}|${entry.uidPath}|${entry.pid}"
+                if (dedupe.add(key)) {
+                    findings += NativeRootFinding(
+                        id = "cgroup_context_${contextRule.token}_${entry.pid}",
+                        label = when {
+                            rule?.label == "LSPosed companion residue" &&
+                                    contextRule.token == ":su:" -> "LSPosed root-context process"
+
+                            else -> contextRule.label
+                        },
+                        value = "PID ${entry.pid}",
+                        detail = buildString {
+                            append("Native cgroup scan exposed PID ")
+                            append(entry.pid)
+                            append(" under ")
+                            append(entry.uidPath)
+                            append(" with suspicious SELinux context ")
+                            append(entry.procContext.ifBlank { "<empty>" })
+                            append('.')
+                            append(entry.describe())
+                        },
+                        group = NativeRootGroup.PROCESS,
+                        severity = NativeRootFindingSeverity.WARNING,
+                        detailMonospace = true,
+                    )
+                }
+            }
+
             val shouldCheckVisibility =
-                rule != null || (entry.procUid != null && entry.procUid != entry.cgroupUid)
+                rule != null || contextRule != null ||
+                        (entry.procUid != null && entry.procUid != entry.cgroupUid)
             if (shouldCheckVisibility && !javaVisible) {
                 val pathState = nativePathsByPath[entry.uidPath]
                 val key = "visibility|${entry.uidPath}|${entry.pid}"
@@ -226,6 +258,9 @@ class CgroupProcessLeakProbe(
             append(cmdline.lowercase())
         }
 
+    private val CgroupProcessLeakNativeEntry.contextText: String
+        get() = procContext.lowercase()
+
     private fun CgroupProcessLeakNativeEntry.describe(): String {
         return buildString {
             append("\nuidPath=")
@@ -236,6 +271,10 @@ class CgroupProcessLeakProbe(
             append(cgroupUid)
             append("\nprocUid=")
             append(procUid ?: -1)
+            if (procContext.isNotBlank()) {
+                append("\nprocContext=")
+                append(procContext)
+            }
             if (comm.isNotBlank()) {
                 append("\ncomm=")
                 append(comm)
@@ -255,6 +294,15 @@ class CgroupProcessLeakProbe(
             CgroupProcessRule("riru", "Riru residue process"),
             CgroupProcessRule("shamiko", "Shamiko residue process"),
             CgroupProcessRule("xposed", "Xposed residue process"),
+        )
+
+        private val suspiciousContextRules = listOf(
+            CgroupProcessRule(":su:", "Root-domain process context"),
+            CgroupProcessRule("magisk", "Magisk process context"),
+            CgroupProcessRule("kernelsu", "KernelSU process context"),
+            CgroupProcessRule("apatch", "APatch process context"),
+            CgroupProcessRule("unconfined", "Unconfined process context"),
+            CgroupProcessRule("permissive", "Permissive process context"),
         )
     }
 }

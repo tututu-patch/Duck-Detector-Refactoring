@@ -12,6 +12,7 @@ data class CgroupProcessLeakNativeEntry(
     val cgroupUid: Int,
     val pid: Int,
     val procUid: Int?,
+    val procContext: String = "",
     val comm: String,
     val cmdline: String,
 )
@@ -68,18 +69,22 @@ class CgroupProcessLeakNativeBridge {
                     }
 
                     line.startsWith("ENTRY=") -> {
-                        val parts = line.removePrefix("ENTRY=").split('\t', limit = 6)
+                        val parts = line.removePrefix("ENTRY=").split('\t', limit = 7)
                         val cgroupUid = parts.getOrNull(1)?.toIntOrNull()
                         val pid = parts.getOrNull(2)?.toIntOrNull()
                         val procUid = parts.getOrNull(3)?.toIntOrNull()
-                        if (parts.size == 6 && cgroupUid != null && pid != null) {
+                        if ((parts.size == 6 || parts.size == 7) && cgroupUid != null && pid != null) {
                             entries += CgroupProcessLeakNativeEntry(
                                 uidPath = parts[0].decodeValue(),
                                 cgroupUid = cgroupUid,
                                 pid = pid,
                                 procUid = procUid?.takeIf { it >= 0 },
-                                comm = parts[4].decodeValue(),
-                                cmdline = parts[5].decodeValue(),
+                                procContext = parts.getOrNull(4)?.decodeValue().orEmpty(),
+                                comm = parts.getOrNull(if (parts.size == 7) 5 else 4)?.decodeValue()
+                                    .orEmpty(),
+                                cmdline = parts.getOrNull(if (parts.size == 7) 6 else 5)
+                                    ?.decodeValue()
+                                    .orEmpty(),
                             )
                         }
                     }
