@@ -1,8 +1,10 @@
 #ifndef DUCKDETECTOR_NATIVEROOT_COMMON_IO_UTILS_H
 #define DUCKDETECTOR_NATIVEROOT_COMMON_IO_UTILS_H
 
+#include <cstddef>
 #include <initializer_list>
 #include <string>
+#include <sys/types.h>
 
 namespace duckdetector::nativeroot {
 
@@ -15,6 +17,8 @@ namespace duckdetector::nativeroot {
     int syscall_getdents64_fd(int fd, void *buffer, size_t count);
 
     std::string read_text_file(const char *path, size_t max_size);
+
+    std::string read_link_target(const char *path, size_t max_size);
 
     bool file_exists(const char *path);
 

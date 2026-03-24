@@ -72,4 +72,139 @@ class NativeRootCardModelMapperTest {
         assertEquals("1", model.scanRows.single { it.label == "Cgroup hits" }.value)
         assertTrue(model.runtimeRows.any { it.label == "Selective cgroup visibility" })
     }
+
+    @Test
+    fun `blocked ksu supercall is shown as support not clean`() {
+        val report = NativeRootReport(
+            stage = NativeRootStage.READY,
+            findings = emptyList(),
+            kernelSuDetected = false,
+            aPatchDetected = false,
+            magiskDetected = false,
+            susfsDetected = false,
+            kernelSuVersion = 0L,
+            nativeAvailable = true,
+            prctlProbeHit = false,
+            susfsProbeHit = false,
+            pathHitCount = 0,
+            pathCheckCount = 12,
+            processHitCount = 0,
+            processCheckedCount = 4,
+            processDeniedCount = 0,
+            cgroupAvailable = false,
+            cgroupPathCheckCount = 0,
+            cgroupAccessiblePathCount = 0,
+            cgroupProcessCheckedCount = 0,
+            cgroupProcDeniedCount = 0,
+            cgroupHitCount = 0,
+            kernelHitCount = 0,
+            kernelSourceCount = 3,
+            propertyHitCount = 0,
+            propertyCheckCount = 5,
+            methods = listOf(
+                NativeRootMethodResult(
+                    label = "ksuReadonlySupercall",
+                    summary = "Blocked",
+                    outcome = NativeRootMethodOutcome.SUPPORT,
+                    detail = "reboot() helper was blocked by seccomp.",
+                ),
+            ),
+            ksuSupercallAttempted = true,
+            ksuSupercallBlocked = true,
+        )
+
+        val model = mapper.map(report)
+
+        assertTrue(model.summary.contains("blocked by app seccomp"))
+        assertEquals("Limited", model.headerFacts.single { it.label == "Direct" }.value)
+        assertTrue(
+            model.nativeRows.any {
+                it.label == "KSU supercall" && it.value == "Blocked by seccomp"
+            }
+        )
+        assertTrue(model.methodRows.any { it.label == "ksuReadonlySupercall" && it.value == "Blocked" })
+    }
+
+    @Test
+    fun `mount drift and manager fingerprint land in runtime method and scan rows`() {
+        val report = NativeRootReport(
+            stage = NativeRootStage.READY,
+            findings = listOf(
+                NativeRootFinding(
+                    id = "mount_anchor_drift_isolated",
+                    label = "Isolated mount anchor drift",
+                    value = "1 anchor(s)",
+                    detail = "/system main=dev=8:1 root=/ point=/system fs=ext4 source=/dev/block/dm-1 isolated=dev=0:22 root=/ point=/system fs=overlay source=overlay",
+                    group = NativeRootGroup.PROCESS,
+                    severity = NativeRootFindingSeverity.WARNING,
+                    detailMonospace = true,
+                ),
+                NativeRootFinding(
+                    id = "ksu_manager_manifest",
+                    label = "KernelSU manager manifest",
+                    value = "3/3 traits",
+                    detail = "package=me.weishu.kernelsu",
+                    group = NativeRootGroup.PACKAGE,
+                    severity = NativeRootFindingSeverity.WARNING,
+                    detailMonospace = true,
+                ),
+            ),
+            kernelSuDetected = false,
+            aPatchDetected = false,
+            magiskDetected = false,
+            susfsDetected = false,
+            kernelSuVersion = 0L,
+            nativeAvailable = true,
+            prctlProbeHit = false,
+            susfsProbeHit = false,
+            pathHitCount = 0,
+            pathCheckCount = 12,
+            processHitCount = 0,
+            processCheckedCount = 4,
+            processDeniedCount = 0,
+            cgroupAvailable = true,
+            cgroupPathCheckCount = 32,
+            cgroupAccessiblePathCount = 2,
+            cgroupProcessCheckedCount = 3,
+            cgroupProcDeniedCount = 0,
+            cgroupHitCount = 0,
+            kernelHitCount = 0,
+            kernelSourceCount = 3,
+            propertyHitCount = 0,
+            propertyCheckCount = 5,
+            methods = listOf(
+                NativeRootMethodResult(
+                    label = "isolatedMountDrift",
+                    summary = "1 anchor(s)",
+                    outcome = NativeRootMethodOutcome.WARNING,
+                    detail = "Compared mount anchors.",
+                ),
+                NativeRootMethodResult(
+                    label = "ksuManagerFingerprint",
+                    summary = "3/3 traits",
+                    outcome = NativeRootMethodOutcome.WARNING,
+                    detail = "Manager manifest fingerprint.",
+                ),
+            ),
+            isolatedMountProbeAvailable = true,
+            mainMountNamespaceInode = "mnt:[41]",
+            isolatedMountNamespaceInode = "mnt:[42]",
+            mountDriftSignalCount = 1,
+            mountAnchorDriftCount = 1,
+            ksuManagerPackagePresent = true,
+            ksuManagerTraitHitCount = 3,
+        )
+
+        val model = mapper.map(report)
+
+        assertTrue(model.runtimeRows.any { it.label == "Isolated mount anchor drift" })
+        assertTrue(model.runtimeRows.any { it.label == "KernelSU manager manifest" })
+        assertTrue(model.methodRows.any { it.label == "isolatedMountDrift" && it.value == "1 anchor(s)" })
+        assertTrue(model.methodRows.any { it.label == "ksuManagerFingerprint" && it.value == "3/3 traits" })
+        assertEquals("mnt:[41]", model.scanRows.single { it.label == "Main mnt ns" }.value)
+        assertEquals("mnt:[42]", model.scanRows.single { it.label == "Isolated mnt ns" }.value)
+        assertEquals("1", model.scanRows.single { it.label == "Mount drift hits" }.value)
+        assertEquals("Present", model.scanRows.single { it.label == "Manager package" }.value)
+        assertEquals("3/3", model.scanRows.single { it.label == "Manager traits" }.value)
+    }
 }

@@ -20,7 +20,19 @@ class NativeRootNativeBridgeTest {
                 SUSFS=0
                 KSU_VERSION=12000
                 PRCTL_HIT=1
+                KSU_SUPERCALL_ATTEMPTED=1
+                KSU_SUPERCALL_HIT=1
+                KSU_SUPERCALL_BLOCKED=0
+                KSU_SUPERCALL_SAFE_MODE=1
+                KSU_SUPERCALL_LKM=1
+                KSU_SUPERCALL_LATE_LOAD=1
+                KSU_SUPERCALL_PR_BUILD=0
+                KSU_SUPERCALL_MANAGER=0
                 SUSFS_HIT=0
+                SELF_SU_DOMAIN=1
+                SELF_CONTEXT=u:r:su:s0
+                SELF_KSU_DRIVER_FDS=1
+                SELF_KSU_FDWRAPPER_FDS=2
                 PATH_HITS=2
                 PATH_CHECKS=12
                 PROCESS_HITS=1
@@ -41,6 +53,16 @@ class NativeRootNativeBridgeTest {
         assertTrue(snapshot.kernelSuDetected)
         assertTrue(snapshot.magiskDetected)
         assertEquals(12000L, snapshot.kernelSuVersion)
+        assertTrue(snapshot.ksuSupercallAttempted)
+        assertTrue(snapshot.ksuSupercallProbeHit)
+        assertFalse(snapshot.ksuSupercallBlocked)
+        assertTrue(snapshot.ksuSupercallSafeMode)
+        assertTrue(snapshot.ksuSupercallLkm)
+        assertTrue(snapshot.ksuSupercallLateLoad)
+        assertTrue(snapshot.selfSuDomain)
+        assertEquals("u:r:su:s0", snapshot.selfContext)
+        assertEquals(1, snapshot.selfKsuDriverFdCount)
+        assertEquals(2, snapshot.selfKsuFdwrapperFdCount)
         assertEquals(4, snapshot.findings.size)
         assertEquals("PROPERTY", snapshot.findings.last().group)
         assertTrue(snapshot.findings.last().detail.contains('\n'))

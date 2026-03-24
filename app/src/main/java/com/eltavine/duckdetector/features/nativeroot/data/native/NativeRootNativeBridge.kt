@@ -57,7 +57,25 @@ class NativeRootNativeBridge {
             "SUSFS" -> copy(susfsDetected = value.asBool())
             "KSU_VERSION" -> copy(kernelSuVersion = value.toLongOrNull() ?: kernelSuVersion)
             "PRCTL_HIT" -> copy(prctlProbeHit = value.asBool())
+            "KSU_SUPERCALL_ATTEMPTED" -> copy(ksuSupercallAttempted = value.asBool())
+            "KSU_SUPERCALL_HIT" -> copy(ksuSupercallProbeHit = value.asBool())
+            "KSU_SUPERCALL_BLOCKED" -> copy(ksuSupercallBlocked = value.asBool())
+            "KSU_SUPERCALL_SAFE_MODE" -> copy(ksuSupercallSafeMode = value.asBool())
+            "KSU_SUPERCALL_LKM" -> copy(ksuSupercallLkm = value.asBool())
+            "KSU_SUPERCALL_LATE_LOAD" -> copy(ksuSupercallLateLoad = value.asBool())
+            "KSU_SUPERCALL_PR_BUILD" -> copy(ksuSupercallPrBuild = value.asBool())
+            "KSU_SUPERCALL_MANAGER" -> copy(ksuSupercallManager = value.asBool())
             "SUSFS_HIT" -> copy(susfsProbeHit = value.asBool())
+            "SELF_SU_DOMAIN" -> copy(selfSuDomain = value.asBool())
+            "SELF_CONTEXT" -> copy(selfContext = value.decodeValue())
+            "SELF_KSU_DRIVER_FDS" -> copy(
+                selfKsuDriverFdCount = value.toIntOrNull() ?: selfKsuDriverFdCount
+            )
+
+            "SELF_KSU_FDWRAPPER_FDS" -> copy(
+                selfKsuFdwrapperFdCount = value.toIntOrNull() ?: selfKsuFdwrapperFdCount
+            )
+
             "PATH_HITS" -> copy(pathHitCount = value.toIntOrNull() ?: pathHitCount)
             "PATH_CHECKS" -> copy(pathCheckCount = value.toIntOrNull() ?: pathCheckCount)
             "PROCESS_HITS" -> copy(processHitCount = value.toIntOrNull() ?: processHitCount)

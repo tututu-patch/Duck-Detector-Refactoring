@@ -70,6 +70,17 @@ namespace duckdetector::nativeroot {
         return trim_copy(content);
     }
 
+    std::string read_link_target(const char *path, const size_t max_size) {
+        std::string content;
+        content.resize(max_size);
+        const ssize_t bytes_read = readlink(path, content.data(), max_size);
+        if (bytes_read <= 0) {
+            return "";
+        }
+        content.resize(static_cast<size_t>(bytes_read));
+        return trim_copy(content);
+    }
+
     namespace {
 
         bool stat_path(const char *path, struct stat *stat_buffer) {

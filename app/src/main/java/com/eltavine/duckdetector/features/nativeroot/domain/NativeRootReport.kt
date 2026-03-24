@@ -13,6 +13,7 @@ enum class NativeRootGroup(
     SIDE_CHANNEL("Native probes"),
     PATH("Runtime artifacts"),
     PROCESS("Runtime artifacts"),
+    PACKAGE("Runtime artifacts"),
     KERNEL("Kernel traces"),
     PROPERTY("Property residue"),
 }
@@ -77,12 +78,36 @@ data class NativeRootReport(
     val propertyCheckCount: Int,
     val methods: List<NativeRootMethodResult>,
     val errorMessage: String? = null,
+    val ksuSupercallAttempted: Boolean = false,
+    val ksuSupercallProbeHit: Boolean = false,
+    val ksuSupercallBlocked: Boolean = false,
+    val ksuSupercallSafeMode: Boolean = false,
+    val ksuSupercallLkm: Boolean = false,
+    val ksuSupercallLateLoad: Boolean = false,
+    val ksuSupercallPrBuild: Boolean = false,
+    val ksuSupercallManager: Boolean = false,
+    val selfSuDomain: Boolean = false,
+    val selfContext: String = "",
+    val selfKsuDriverFdCount: Int = 0,
+    val selfKsuFdwrapperFdCount: Int = 0,
+    val isolatedMountProbeAvailable: Boolean = false,
+    val mainMountNamespaceInode: String = "",
+    val isolatedMountNamespaceInode: String = "",
+    val mountDriftSignalCount: Int = 0,
+    val mountAnchorDriftCount: Int = 0,
+    val ksuManagerPackagePresent: Boolean = false,
+    val ksuManagerTraitHitCount: Int = 0,
+    val ksuManagerVisibilityRestricted: Boolean = false,
 ) {
     val directFindings: List<NativeRootFinding>
         get() = findings.filter { it.group == NativeRootGroup.SYSCALL || it.group == NativeRootGroup.SIDE_CHANNEL }
 
     val runtimeFindings: List<NativeRootFinding>
-        get() = findings.filter { it.group == NativeRootGroup.PATH || it.group == NativeRootGroup.PROCESS }
+        get() = findings.filter {
+            it.group == NativeRootGroup.PATH ||
+                    it.group == NativeRootGroup.PROCESS ||
+                    it.group == NativeRootGroup.PACKAGE
+        }
 
     val cgroupFindings: List<NativeRootFinding>
         get() = findings.filter { it.id.startsWith("cgroup_") }

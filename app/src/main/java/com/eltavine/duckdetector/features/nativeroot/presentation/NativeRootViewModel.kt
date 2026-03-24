@@ -1,5 +1,6 @@
 package com.eltavine.duckdetector.features.nativeroot.presentation
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -57,11 +58,12 @@ class NativeRootViewModel(
     }
 
     companion object {
-        fun factory(): ViewModelProvider.Factory {
+        fun factory(context: Context): ViewModelProvider.Factory {
+            val appContext = context.applicationContext
             return object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return NativeRootViewModel(NativeRootRepository()) as T
+                    return NativeRootViewModel(NativeRootRepository(appContext)) as T
                 }
             }
         }

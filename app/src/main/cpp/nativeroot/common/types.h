@@ -33,6 +33,9 @@ namespace duckdetector::nativeroot {
         int checked_count = 0;
         int denied_count = 0;
         long numeric_value = 0;
+        long extra_numeric_value = 0;
+        long aux_flags = 0;
+        std::string extra_text;
         std::vector<Finding> findings;
     };
 
@@ -41,7 +44,19 @@ namespace duckdetector::nativeroot {
         DetectionFlags flags;
         long kernel_su_version = 0;
         bool prctl_probe_hit = false;
+        bool ksu_supercall_attempted = false;
+        bool ksu_supercall_probe_hit = false;
+        bool ksu_supercall_blocked = false;
+        bool ksu_supercall_safe_mode = false;
+        bool ksu_supercall_lkm = false;
+        bool ksu_supercall_late_load = false;
+        bool ksu_supercall_pr_build = false;
+        bool ksu_supercall_manager = false;
         bool susfs_probe_hit = false;
+        bool self_su_domain = false;
+        std::string self_context;
+        int self_ksu_driver_fd_count = 0;
+        int self_ksu_fdwrapper_count = 0;
         int path_hit_count = 0;
         int path_check_count = 0;
         int process_hit_count = 0;

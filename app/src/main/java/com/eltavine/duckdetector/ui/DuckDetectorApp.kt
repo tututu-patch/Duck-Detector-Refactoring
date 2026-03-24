@@ -404,7 +404,7 @@ private fun AppReadyShell(
     val lsposedFactory = remember(context) { LSPosedViewModel.factory(context) }
     val memoryFactory = remember { MemoryViewModel.factory() }
     val mountFactory = remember { MountViewModel.factory() }
-    val nativeRootFactory = remember { NativeRootViewModel.factory() }
+    val nativeRootFactory = remember(context) { NativeRootViewModel.factory(context) }
     val playIntegrityFixFactory = remember { PlayIntegrityFixViewModel.factory() }
     val selinuxFactory = remember { SelinuxViewModel.factory() }
     val suFactory = remember { SuViewModel.factory() }

@@ -60,7 +60,25 @@ namespace duckdetector::nativeroot {
         output << "SUSFS=" << (snapshot.flags.susfs ? '1' : '0') << '\n';
         output << "KSU_VERSION=" << snapshot.kernel_su_version << '\n';
         output << "PRCTL_HIT=" << (snapshot.prctl_probe_hit ? '1' : '0') << '\n';
+        output << "KSU_SUPERCALL_ATTEMPTED=" << (snapshot.ksu_supercall_attempted ? '1' : '0')
+               << '\n';
+        output << "KSU_SUPERCALL_HIT=" << (snapshot.ksu_supercall_probe_hit ? '1' : '0') << '\n';
+        output << "KSU_SUPERCALL_BLOCKED=" << (snapshot.ksu_supercall_blocked ? '1' : '0')
+               << '\n';
+        output << "KSU_SUPERCALL_SAFE_MODE=" << (snapshot.ksu_supercall_safe_mode ? '1' : '0')
+               << '\n';
+        output << "KSU_SUPERCALL_LKM=" << (snapshot.ksu_supercall_lkm ? '1' : '0') << '\n';
+        output << "KSU_SUPERCALL_LATE_LOAD=" << (snapshot.ksu_supercall_late_load ? '1' : '0')
+               << '\n';
+        output << "KSU_SUPERCALL_PR_BUILD=" << (snapshot.ksu_supercall_pr_build ? '1' : '0')
+               << '\n';
+        output << "KSU_SUPERCALL_MANAGER=" << (snapshot.ksu_supercall_manager ? '1' : '0')
+               << '\n';
         output << "SUSFS_HIT=" << (snapshot.susfs_probe_hit ? '1' : '0') << '\n';
+        output << "SELF_SU_DOMAIN=" << (snapshot.self_su_domain ? '1' : '0') << '\n';
+        output << "SELF_CONTEXT=" << escape_value(snapshot.self_context) << '\n';
+        output << "SELF_KSU_DRIVER_FDS=" << snapshot.self_ksu_driver_fd_count << '\n';
+        output << "SELF_KSU_FDWRAPPER_FDS=" << snapshot.self_ksu_fdwrapper_count << '\n';
         output << "PATH_HITS=" << snapshot.path_hit_count << '\n';
         output << "PATH_CHECKS=" << snapshot.path_check_count << '\n';
         output << "PROCESS_HITS=" << snapshot.process_hit_count << '\n';

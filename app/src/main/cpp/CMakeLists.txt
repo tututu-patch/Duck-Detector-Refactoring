@@ -88,7 +88,9 @@ set(NATIVE_ROOT_SOURCES
     nativeroot/common/io_utils.cpp
     nativeroot/cgroup_bridge.cpp
     nativeroot/probes/prctl_probe.cpp
+    nativeroot/probes/ksu_supercall_probe.cpp
     nativeroot/probes/susfs_probe.cpp
+    nativeroot/probes/self_process_ioc_probe.cpp
     nativeroot/probes/cgroup_process_probe.cpp
     nativeroot/probes/path_probe.cpp
     nativeroot/probes/process_probe.cpp

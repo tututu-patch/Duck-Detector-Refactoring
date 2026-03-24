@@ -1,10 +1,15 @@
 package com.eltavine.duckdetector.features.nativeroot.data.repository
 
+import android.content.Context
 import com.eltavine.duckdetector.features.nativeroot.data.native.NativeRootNativeBridge
 import com.eltavine.duckdetector.features.nativeroot.data.native.NativeRootNativeFinding
 import com.eltavine.duckdetector.features.nativeroot.data.native.NativeRootNativeSnapshot
 import com.eltavine.duckdetector.features.nativeroot.data.probes.CgroupProcessLeakProbe
 import com.eltavine.duckdetector.features.nativeroot.data.probes.CgroupProcessLeakProbeResult
+import com.eltavine.duckdetector.features.nativeroot.data.probes.KernelSuManagerFingerprintProbe
+import com.eltavine.duckdetector.features.nativeroot.data.probes.KernelSuManagerFingerprintProbeResult
+import com.eltavine.duckdetector.features.nativeroot.data.probes.MountNamespaceDriftProbe
+import com.eltavine.duckdetector.features.nativeroot.data.probes.MountNamespaceDriftProbeResult
 import com.eltavine.duckdetector.features.nativeroot.data.probes.RootProcessAuditProbe
 import com.eltavine.duckdetector.features.nativeroot.data.probes.ShellTmpMetadataProbe
 import com.eltavine.duckdetector.features.nativeroot.domain.NativeRootFinding
@@ -18,20 +23,27 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class NativeRootRepository(
+    context: Context? = null,
     private val nativeBridge: NativeRootNativeBridge = NativeRootNativeBridge(),
     private val shellTmpMetadataProbe: ShellTmpMetadataProbe = ShellTmpMetadataProbe(),
     private val rootProcessAuditProbe: RootProcessAuditProbe = RootProcessAuditProbe(),
     private val cgroupProcessLeakProbe: CgroupProcessLeakProbe = CgroupProcessLeakProbe(),
+    private val mountNamespaceDriftProbe: MountNamespaceDriftProbe = MountNamespaceDriftProbe(
+        context?.applicationContext
+    ),
+    private val kernelSuManagerFingerprintProbe: KernelSuManagerFingerprintProbe =
+        KernelSuManagerFingerprintProbe(context?.applicationContext),
 ) {
 
     suspend fun scan(): NativeRootReport = withContext(Dispatchers.IO) {
-        runCatching { scanInternal() }
-            .getOrElse { throwable ->
-                NativeRootReport.failed(throwable.message ?: "Native Root scan failed.")
-            }
+        try {
+            scanInternal()
+        } catch (throwable: Throwable) {
+            NativeRootReport.failed(throwable.message ?: "Native Root scan failed.")
+        }
     }
 
-    private fun scanInternal(): NativeRootReport {
+    internal suspend fun scanInternal(): NativeRootReport {
         val snapshot = nativeBridge.collectSnapshot()
         val nativeFindings = snapshot.findings.mapIndexed { index, finding ->
             finding.toDomainFinding(index)
@@ -39,8 +51,15 @@ class NativeRootRepository(
         val shellTmpResult = shellTmpMetadataProbe.run()
         val rootProcessResult = rootProcessAuditProbe.run()
         val cgroupResult = cgroupProcessLeakProbe.run()
+        val mountNamespaceResult = mountNamespaceDriftProbe.run()
+        val managerFingerprintResult = kernelSuManagerFingerprintProbe.run()
         val findings =
-            nativeFindings + shellTmpResult.findings + rootProcessResult.findings + cgroupResult.findings
+            nativeFindings +
+                    shellTmpResult.findings +
+                    rootProcessResult.findings +
+                    cgroupResult.findings +
+                    mountNamespaceResult.findings +
+                    managerFingerprintResult.findings
 
         return NativeRootReport(
             stage = NativeRootStage.READY,
@@ -74,7 +93,29 @@ class NativeRootRepository(
                 shellTmpDetail = shellTmpResult.detail,
                 rootProcessDetail = rootProcessResult.detail,
                 cgroupResult = cgroupResult,
+                mountNamespaceResult = mountNamespaceResult,
+                managerFingerprintResult = managerFingerprintResult,
             ),
+            ksuSupercallAttempted = snapshot.ksuSupercallAttempted,
+            ksuSupercallProbeHit = snapshot.ksuSupercallProbeHit,
+            ksuSupercallBlocked = snapshot.ksuSupercallBlocked,
+            ksuSupercallSafeMode = snapshot.ksuSupercallSafeMode,
+            ksuSupercallLkm = snapshot.ksuSupercallLkm,
+            ksuSupercallLateLoad = snapshot.ksuSupercallLateLoad,
+            ksuSupercallPrBuild = snapshot.ksuSupercallPrBuild,
+            ksuSupercallManager = snapshot.ksuSupercallManager,
+            selfSuDomain = snapshot.selfSuDomain,
+            selfContext = snapshot.selfContext,
+            selfKsuDriverFdCount = snapshot.selfKsuDriverFdCount,
+            selfKsuFdwrapperFdCount = snapshot.selfKsuFdwrapperFdCount,
+            isolatedMountProbeAvailable = mountNamespaceResult.isolatedProcessAvailable,
+            mainMountNamespaceInode = mountNamespaceResult.mainNamespaceInode,
+            isolatedMountNamespaceInode = mountNamespaceResult.isolatedNamespaceInode,
+            mountDriftSignalCount = mountNamespaceResult.signalCount,
+            mountAnchorDriftCount = mountNamespaceResult.mountAnchorDriftCount,
+            ksuManagerPackagePresent = managerFingerprintResult.packagePresent,
+            ksuManagerTraitHitCount = managerFingerprintResult.traitHitCount,
+            ksuManagerVisibilityRestricted = managerFingerprintResult.visibilityRestricted,
         )
     }
 
@@ -84,15 +125,57 @@ class NativeRootRepository(
         shellTmpDetail: String,
         rootProcessDetail: String,
         cgroupResult: CgroupProcessLeakProbeResult,
+        mountNamespaceResult: MountNamespaceDriftProbeResult,
+        managerFingerprintResult: KernelSuManagerFingerprintProbeResult,
     ): List<NativeRootMethodResult> {
         val directFindings =
             findings.filter { it.group == NativeRootGroup.SYSCALL || it.group == NativeRootGroup.SIDE_CHANNEL }
         val runtimeFindings =
-            findings.filter { it.group == NativeRootGroup.PATH || it.group == NativeRootGroup.PROCESS }
+            findings.filter {
+                it.group == NativeRootGroup.PATH ||
+                        it.group == NativeRootGroup.PROCESS ||
+                        it.group == NativeRootGroup.PACKAGE
+            }
         val kernelFindings = findings.filter { it.group == NativeRootGroup.KERNEL }
         val propertyFindings = findings.filter { it.group == NativeRootGroup.PROPERTY }
 
         return listOf(
+            NativeRootMethodResult(
+                label = "ksuReadonlySupercall",
+                summary = when {
+                    snapshot.ksuSupercallProbeHit && snapshot.kernelSuVersion > 0L -> "v${snapshot.kernelSuVersion}"
+                    snapshot.ksuSupercallProbeHit -> "Detected"
+                    snapshot.ksuSupercallBlocked -> "Blocked"
+                    snapshot.ksuSupercallAttempted -> "Clean"
+                    else -> "Unavailable"
+                },
+                outcome = when {
+                    snapshot.ksuSupercallProbeHit -> NativeRootMethodOutcome.DETECTED
+                    snapshot.ksuSupercallBlocked -> NativeRootMethodOutcome.SUPPORT
+                    snapshot.ksuSupercallAttempted -> NativeRootMethodOutcome.CLEAN
+                    else -> NativeRootMethodOutcome.SUPPORT
+                },
+                detail = buildString {
+                    append("Uses a sacrificial child process to request a temporary [ksu_driver] fd through the KernelSU reboot-magic install path, then calls GET_INFO and CHECK_SAFEMODE without manager/root privileges.")
+                    if (snapshot.ksuSupercallBlocked) {
+                        append("\nThe device seccomp policy trapped reboot() for the helper process before a [ksu_driver] fd could be installed.")
+                    } else if (snapshot.ksuSupercallProbeHit) {
+                        append("\nFlags:")
+                        append(if (snapshot.ksuSupercallLkm) " LKM" else " non-LKM")
+                        append(if (snapshot.ksuSupercallLateLoad) ", late-load" else ", early-load")
+                        if (snapshot.ksuSupercallPrBuild) {
+                            append(", PR build")
+                        }
+                        if (snapshot.ksuSupercallManager) {
+                            append(", manager context")
+                        }
+                        append("\nSafe mode: ")
+                        append(if (snapshot.ksuSupercallSafeMode) "enabled" else "disabled")
+                    } else if (!snapshot.ksuSupercallAttempted) {
+                        append("\nThe helper process did not return a valid result, so this direct probe stayed unavailable.")
+                    }
+                },
+            ),
             NativeRootMethodResult(
                 label = "prctlProbe",
                 summary = when {
@@ -123,6 +206,84 @@ class NativeRootRepository(
                 detail = "Fork child and attempt setresuid to a lower UID. Old SUSFS/KSU hooks can kill the child instead of returning EPERM.",
             ),
             NativeRootMethodResult(
+                label = "selfProcessIoc",
+                summary = when {
+                    snapshot.selfSuDomain -> "su domain"
+                    snapshot.selfKsuDriverFdCount + snapshot.selfKsuFdwrapperFdCount > 0 -> "FD residue"
+                    snapshot.selfContext.isNotBlank() -> "Normal"
+                    snapshot.available -> "Clean"
+                    else -> "Unavailable"
+                },
+                outcome = when {
+                    snapshot.selfSuDomain ||
+                            snapshot.selfKsuDriverFdCount + snapshot.selfKsuFdwrapperFdCount > 0 ->
+                        NativeRootMethodOutcome.DETECTED
+
+                    snapshot.available -> NativeRootMethodOutcome.CLEAN
+                    else -> NativeRootMethodOutcome.SUPPORT
+                },
+                detail = buildString {
+                    append("Checks whether the current app process already runs in the KernelSU su SELinux domain or holds ambient [ksu_driver]/[ksu_fdwrapper] descriptors before escalation.")
+                    if (snapshot.selfContext.isNotBlank()) {
+                        append("\nContext: ")
+                        append(snapshot.selfContext)
+                    }
+                    append("\nDriver FDs: ")
+                    append(snapshot.selfKsuDriverFdCount)
+                    append("\nFD wrapper FDs: ")
+                    append(snapshot.selfKsuFdwrapperFdCount)
+                },
+            ),
+            NativeRootMethodResult(
+                label = "isolatedMountDrift",
+                summary = when {
+                    mountNamespaceResult.signalCount > 0 && mountNamespaceResult.mountAnchorDriftCount > 0 ->
+                        "${mountNamespaceResult.mountAnchorDriftCount} anchor(s)"
+
+                    mountNamespaceResult.signalCount > 0 -> "${mountNamespaceResult.signalCount} drift hit(s)"
+                    mountNamespaceResult.isolatedProcessAvailable -> "Clean"
+                    mountNamespaceResult.available -> "Unavailable"
+                    else -> "Unavailable"
+                },
+                outcome = when {
+                    mountNamespaceResult.signalCount > 0 -> NativeRootMethodOutcome.WARNING
+                    mountNamespaceResult.isolatedProcessAvailable -> NativeRootMethodOutcome.CLEAN
+                    else -> NativeRootMethodOutcome.SUPPORT
+                },
+                detail = buildString {
+                    append("Compares the main app process against an isolated helper process using /proc/self/ns/mnt plus /apex, /system, and /vendor mount anchors. This is an ordinary-app-safe way to look for KSU profile mount namespace drift.")
+                    if (mountNamespaceResult.detail.isNotBlank()) {
+                        append("\n")
+                        append(mountNamespaceResult.detail)
+                    }
+                },
+            ),
+            NativeRootMethodResult(
+                label = "ksuManagerFingerprint",
+                summary = when {
+                    managerFingerprintResult.packagePresent && managerFingerprintResult.traitHitCount > 0 ->
+                        "${managerFingerprintResult.traitHitCount}/3 traits"
+
+                    managerFingerprintResult.packagePresent -> "Present"
+                    managerFingerprintResult.visibilityRestricted -> "Scoped"
+                    managerFingerprintResult.available -> "Clean"
+                    else -> "Unavailable"
+                },
+                outcome = when {
+                    managerFingerprintResult.packagePresent -> NativeRootMethodOutcome.WARNING
+                    managerFingerprintResult.visibilityRestricted -> NativeRootMethodOutcome.SUPPORT
+                    managerFingerprintResult.available -> NativeRootMethodOutcome.CLEAN
+                    else -> NativeRootMethodOutcome.SUPPORT
+                },
+                detail = buildString {
+                    append("Reads the public manager manifest for zygotePreloadName, isolatedProcess, and useAppZygote traits under the well-known KernelSU package name. This is auxiliary only because package visibility, repackaging, or renamed managers can change it.")
+                    if (managerFingerprintResult.detail.isNotBlank()) {
+                        append("\n")
+                        append(managerFingerprintResult.detail)
+                    }
+                },
+            ),
+            NativeRootMethodResult(
                 label = "runtimeArtifacts",
                 summary = when {
                     runtimeFindings.isNotEmpty() -> "${runtimeFindings.size} hit(s)"
@@ -136,7 +297,7 @@ class NativeRootRepository(
                     else -> NativeRootMethodOutcome.SUPPORT
                 },
                 detail = buildString {
-                    append("Scan /data/adb manager paths, /data/local/tmp metadata, /proc process state, and per-UID cgroup trees for KernelSU, APatch, KernelPatch, Magisk, selective hiding, and unexpected root-process traces.")
+                    append("Scan /data/adb manager paths, /data/local/tmp metadata, /proc process state, per-UID cgroup trees, isolated-process mount drift, and weak KernelSU manager manifest fingerprints for KernelSU, APatch, KernelPatch, Magisk, selective hiding, and unexpected root-process traces.")
                     if (shellTmpDetail.isNotBlank()) {
                         append("\nShell tmp: ")
                         append(shellTmpDetail)
@@ -148,6 +309,14 @@ class NativeRootRepository(
                     if (cgroupResult.detail.isNotBlank()) {
                         append("\nCgroup audit: ")
                         append(cgroupResult.detail)
+                    }
+                    if (mountNamespaceResult.detail.isNotBlank()) {
+                        append("\nMount drift: ")
+                        append(mountNamespaceResult.detail)
+                    }
+                    if (managerFingerprintResult.detail.isNotBlank()) {
+                        append("\nManager fingerprint: ")
+                        append(managerFingerprintResult.detail)
                     }
                 },
             ),
@@ -242,6 +411,7 @@ class NativeRootRepository(
             "SIDE_CHANNEL" -> NativeRootGroup.SIDE_CHANNEL
             "PATH" -> NativeRootGroup.PATH
             "PROCESS" -> NativeRootGroup.PROCESS
+            "PACKAGE" -> NativeRootGroup.PACKAGE
             "KERNEL" -> NativeRootGroup.KERNEL
             "PROPERTY" -> NativeRootGroup.PROPERTY
             else -> NativeRootGroup.KERNEL
