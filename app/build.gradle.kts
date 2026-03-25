@@ -25,12 +25,26 @@ val releaseKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
 val releaseKeyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").orNull
 val buildTimeUtc = ZonedDateTime.now(ZoneOffset.UTC)
     .format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
+val buildHash = resolveGitShortHash(rootDir)
 val hasReleaseSigning = listOf(
     releaseKeystorePath,
     releaseStorePassword,
     releaseKeyAlias,
     releaseKeyPassword
 ).all { !it.isNullOrBlank() }
+
+fun resolveGitShortHash(workingDirectory: File): String {
+    return try {
+        val process = ProcessBuilder("git", "rev-parse", "--short=12", "HEAD")
+            .directory(workingDirectory)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText().trim() }
+        if (process.waitFor() == 0) output.ifBlank { "unknown" } else "unknown"
+    } catch (_: Exception) {
+        "unknown"
+    }
+}
 
 abstract class RenameApkTask : DefaultTask() {
     @get:InputDirectory
@@ -80,9 +94,10 @@ android {
         applicationId = "com.eltavine.duckdetector"
         minSdk = 29
         targetSdk = 36
-        versionCode = 209
-        versionName = "26.3.9-alpha"
+        versionCode = 210
+        versionName = "26.3.10"
         buildConfigField("String", "BUILD_TIME_UTC", "\"$buildTimeUtc\"")
+        buildConfigField("String", "BUILD_HASH", "\"$buildHash\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

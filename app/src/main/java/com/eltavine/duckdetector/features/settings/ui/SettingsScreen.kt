@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.eltavine.duckdetector.core.ui.components.WrapSafeText
 import com.eltavine.duckdetector.features.licenses.ui.OpenSourceLicensesEntry
 import com.eltavine.duckdetector.features.licenses.ui.OpenSourceLicensesScreen
+import com.eltavine.duckdetector.features.settings.ui.components.AboutCard
 import com.eltavine.duckdetector.features.settings.ui.components.AuthorCard
 import com.eltavine.duckdetector.features.settings.ui.model.SettingsUiState
 import com.eltavine.duckdetector.ui.theme.ShapeTokens
@@ -139,6 +140,13 @@ fun SettingsScreen(
                         )
                     }
                 }
+
+                AboutCard(
+                    versionName = uiState.versionName,
+                    versionCode = uiState.versionCode,
+                    buildTimeUtc = uiState.buildTimeUtc,
+                    buildHash = uiState.buildHash,
+                )
 
                 AuthorCard()
 

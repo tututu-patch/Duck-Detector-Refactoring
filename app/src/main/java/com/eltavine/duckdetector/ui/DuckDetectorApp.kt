@@ -552,7 +552,13 @@ private fun AppReadyShell(
         )
     }
     val settingsState = remember(networkPrefs.consentGranted) {
-        SettingsUiState(isCrlNetworkingEnabled = networkPrefs.consentGranted)
+        SettingsUiState(
+            isCrlNetworkingEnabled = networkPrefs.consentGranted,
+            versionName = BuildConfig.VERSION_NAME,
+            versionCode = BuildConfig.VERSION_CODE,
+            buildTimeUtc = BuildConfig.BUILD_TIME_UTC,
+            buildHash = BuildConfig.BUILD_HASH,
+        )
     }
     val detectorResultNoticeKey = remember(
         isDashboardLoading,
