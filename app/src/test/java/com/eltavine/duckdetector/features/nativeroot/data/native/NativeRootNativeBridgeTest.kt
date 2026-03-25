@@ -76,4 +76,30 @@ class NativeRootNativeBridgeTest {
         assertTrue(snapshot.findings.isEmpty())
         assertEquals(0, snapshot.pathHitCount)
     }
+
+    @Test
+    fun `should skip ksu supercall on xiaomi family devices`() {
+        assertTrue(
+            bridge.shouldSkipKsuSupercall(
+                manufacturer = "Xiaomi",
+                brand = "Redmi",
+            )
+        )
+        assertTrue(
+            bridge.shouldSkipKsuSupercall(
+                manufacturer = "POCO",
+                brand = "poco",
+            )
+        )
+    }
+
+    @Test
+    fun `should keep ksu supercall on non xiaomi devices`() {
+        assertFalse(
+            bridge.shouldSkipKsuSupercall(
+                manufacturer = "Google",
+                brand = "google",
+            )
+        )
+    }
 }

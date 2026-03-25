@@ -75,7 +75,7 @@ class DangerousAppsCardModelMapper {
     private fun buildSummary(report: DangerousAppsReport): String {
         return when (report.stage) {
             DangerousAppsStage.LOADING ->
-                "PackageManager, storage mirrors, loopback, IPC, accessibility, and native package-path probes are collecting local evidence."
+                "PackageManager, open APK descriptors, storage mirrors, loopback, IPC, accessibility, and native package-path probes are collecting local evidence."
 
             DangerousAppsStage.FAILED ->
                 report.issues.firstOrNull()
@@ -104,10 +104,10 @@ class DangerousAppsCardModelMapper {
                     "PackageManager reported a full inventory surface but returned only ${report.packageManagerVisibleCount} visible packages. That is unusually low for a modern device and can happen under HMA-style whitelist filtering."
 
                 report.packageVisibility == DangerousPackageVisibility.RESTRICTED ->
-                    "Storage-side probes still ran, but a clean result may under-report installed tools when PackageManager visibility is scoped."
+                    "Open APK descriptor and storage-side probes still ran, but a clean result may under-report installed tools when PackageManager visibility is scoped."
 
                 else ->
-                    "PackageManager, storage, loopback, IPC, accessibility, and native package-path probes did not surface known high-risk tools."
+                    "PackageManager, open APK descriptors, storage, loopback, IPC, accessibility, and native package-path probes did not surface known high-risk tools."
             }
         }
     }

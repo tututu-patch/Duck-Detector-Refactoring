@@ -6,6 +6,7 @@ import android.os.Parcel
 import android.provider.Settings
 import android.text.TextUtils
 import com.eltavine.duckdetector.features.dangerousapps.data.native.DangerousAppsNativeBridge
+import com.eltavine.duckdetector.features.dangerousapps.data.probes.OpenApkFdPackageProbe
 import com.eltavine.duckdetector.features.dangerousapps.data.probes.SceneLoopbackProbe
 import com.eltavine.duckdetector.features.dangerousapps.data.rules.DangerousAppsCatalog
 import com.eltavine.duckdetector.features.dangerousapps.domain.DangerousAppFinding
@@ -23,6 +24,7 @@ import kotlinx.coroutines.withContext
 class DangerousAppsRepository(
     private val context: Context,
     private val nativeBridge: DangerousAppsNativeBridge = DangerousAppsNativeBridge(),
+    private val openApkFdPackageProbe: OpenApkFdPackageProbe = OpenApkFdPackageProbe(),
     private val sceneLoopbackProbe: SceneLoopbackProbe = SceneLoopbackProbe(),
 ) {
 
@@ -67,6 +69,17 @@ class DangerousAppsRepository(
                 }
             }
         }
+
+        openApkFdPackageProbe
+            .run(targets.mapTo(linkedSetOf()) { it.packageName })
+            .detectedPackages
+            .forEach { packageName ->
+                appendMethod(
+                    detectedApps = detectedApps,
+                    packageName = packageName,
+                    method = DangerousDetectionMethod(DangerousDetectionMethodKind.OPEN_APK_FD),
+                )
+            }
 
         enumerateAndroidDirsByListing().forEach { packageName ->
             appendMethod(
@@ -200,6 +213,7 @@ class DangerousAppsRepository(
             if (packageVisibility == DangerousPackageVisibility.FULL) {
                 add(DangerousDetectionMethodKind.PACKAGE_MANAGER)
             }
+            add(DangerousDetectionMethodKind.OPEN_APK_FD)
             add(DangerousDetectionMethodKind.DIRECTORY_LISTING)
             add(DangerousDetectionMethodKind.ZWC_BYPASS)
             add(DangerousDetectionMethodKind.IGNORABLE_CODEPOINT_BYPASS)
