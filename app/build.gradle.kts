@@ -148,6 +148,7 @@ android {
     lint {
         baseline = file("lint-baseline.xml")
     }
+    buildToolsVersion = "36.1.0"
 }
 
 androidComponents {
