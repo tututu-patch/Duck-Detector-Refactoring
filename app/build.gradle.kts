@@ -17,7 +17,9 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.bundles.app.runtime)
     implementation(libs.bundles.app.compose)
-    implementation(libs.aboutlibraries.compose.m3)
+    implementation(libs.aboutlibraries.compose.m3) {
+        exclude(group = "com.github.skydoves", module = "compose-stability-runtime")
+    }
     implementation(libs.bundles.app.security)
     testImplementation(libs.bundles.test.unit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

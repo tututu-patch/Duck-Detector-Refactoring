@@ -11,6 +11,7 @@ import org.gradle.api.Project
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
@@ -70,7 +71,7 @@ abstract class RenameApkTask : DefaultTask() {
     @get:Internal
     abstract val transformationRequest: Property<ArtifactTransformationRequest<RenameApkTask>>
 
-    @get:Internal
+    @get:Input
     abstract val gitHash: Property<String>
 
     @TaskAction

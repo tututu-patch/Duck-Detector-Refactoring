@@ -193,8 +193,8 @@ jobs:
           from pathlib import Path
 
           metadata_candidates = [
-              Path("app/release/output-metadata.json"),
               Path("app/build/outputs/apk/release/output-metadata.json"),
+              Path("app/release/output-metadata.json"),
           ]
           metadata_path = next((path for path in metadata_candidates if path.exists()), None)
           if metadata_path is None:
@@ -207,24 +207,40 @@ jobs:
           if not elements:
               raise SystemExit("No APK entries found in output-metadata.json.")
 
-          universal_elements = [
+          apk_elements = [
               element for element in elements
-              if element.get("outputFile", "").endswith("-Universal.apk")
+              if element.get("outputFile", "").endswith(".apk")
           ]
-          if len(universal_elements) != 1:
+          if not apk_elements:
+              raise SystemExit("No APK files were listed in output-metadata.json.")
+
+          universal_elements = [
+              element for element in apk_elements
+              if (element.get("type") or "").upper() == "UNIVERSAL"
+              or element.get("outputFile", "").endswith("-Universal.apk")
+          ]
+
+          if len(universal_elements) == 1:
+              selected_element = universal_elements[0]
+          elif len(apk_elements) == 1:
+              selected_element = apk_elements[0]
+          else:
+              listed_outputs = ", ".join(
+                  sorted(element.get("outputFile", "<missing outputFile>") for element in apk_elements)
+              )
               raise SystemExit(
-                  f"Expected exactly one Universal APK entry, found {len(universal_elements)}."
+                  f"Expected a single release APK entry, found {len(apk_elements)}: {listed_outputs}"
               )
 
-          apk_path = metadata_path.parent / universal_elements[0]["outputFile"]
+          apk_path = metadata_path.parent / selected_element["outputFile"]
           if not apk_path.exists():
-              raise SystemExit(f"Universal APK not found at {apk_path}.")
+              raise SystemExit(f"Release APK not found at {apk_path}.")
 
           payload = {
               "apk_path": str(apk_path),
               "apk_name": apk_path.name,
-              "version_name": universal_elements[0].get("versionName") or "unknown",
-              "version_code": str(universal_elements[0].get("versionCode") or "unknown"),
+              "version_name": selected_element.get("versionName") or "unknown",
+              "version_code": str(selected_element.get("versionCode") or "unknown"),
           }
           print(json.dumps(payload))
           PY
@@ -238,7 +254,7 @@ jobs:
           commit_subject=$(git log -1 --pretty=%s)
           commit_author=$(git log -1 --pretty=%an)
           commit_body=$(git log -1 --pretty=%b)
-          git_hash=$(git rev-parse --short HEAD)
+          git_hash=$(git rev-parse --short=8 HEAD)
           caption=$(METADATA_JSON="${metadata_json}" COMMIT_SUBJECT="${commit_subject}" COMMIT_BODY="${commit_body}" COMMIT_AUTHOR="${commit_author}" DURATION_HUMAN="${DURATION_HUMAN}" GIT_BRANCH="${GIT_BRANCH}" GIT_HASH="${git_hash}" SIGNER_NAME="${SIGNER_NAME}" python3 - <<'PY'
           import json
           import os
